@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'preact/hooks';
+import { useState, useEffect, useRef } from 'preact/hooks';
 import './emulator.css';
 import { LuChevronsRight, LuPause, LuSettings, LuX } from 'react-icons/lu';
 import { EmuCore, System } from '../cores/types';
@@ -17,6 +17,8 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
   const [started, setStarted] = useState(false);
   const [paused, setPaused] = useState(false);
   const [fastForward, setFastForward] = useState(false);
+  const [bootError, setBootError] = useState<string | null>(null);
+  const gbaCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const shutdownListener = () => {
     stopEmulating();
@@ -88,23 +90,27 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
           }
         }
       } else if (system === 'gba') {
-        // GBA boot
-        const canvas = (core as any).getCanvas();
-        // The core hands us a bare canvas with no class -- tag it so it
-        // picks up the same responsive sizing/safe-area rules as the NDS
-        // screens instead of falling back to its own inline width/height.
-        canvas.classList.add('emulator-screen', 'gba-screen');
-        const container = document.querySelector('.emulator-container');
-        if (container) {
-          container.innerHTML = '';
-          container.appendChild(canvas);
-        }
-        core.resume();
-        
-        const title = core.getGameTitle();
-        if (title) {
-          setGameTitle(title);
-        }
+        // GBA boot.
+        //
+        // The canvas below is the one Preact rendered and still owns. We hand it
+        // to the core and let the core size its own backing store (240x160) --
+        // we never wipe the container and swap in a second element, and nothing
+        // here ever assigns canvas.className. That combination is what used to
+        // leave the canvas 0px tall with the emulator faithfully rendering into
+        // nothing.
+        const canvas = gbaCanvasRef.current;
+        if (!canvas) return;
+
+        core.attachCanvas?.(canvas);
+        core.boot()
+          .then(() => {
+            const title = core.getGameTitle();
+            if (title) setGameTitle(title);
+          })
+          .catch((error) => {
+            console.error('Failed to boot GBA:', error);
+            setBootError(error instanceof Error ? error.message : String(error));
+          });
       }
     }
   }, [started, system, core]);
@@ -175,10 +181,13 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
           </>
         ) : (
           <>
-            <canvas className="emulator-screen gba-screen" id="gba-canvas" height="160" width="240" />
+            <canvas ref={gbaCanvasRef} className="emulator-screen gba-screen" id="gba-canvas" height="160" width="240" />
           </>
         )}
       </div>
+      {bootError && (
+        <div className="emulator-boot-error">Could not start this ROM: {bootError}</div>
+      )}
       <TouchControls system={system} onInput={handleTouchInput} />
     </>
   )

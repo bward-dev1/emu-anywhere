@@ -20,7 +20,7 @@ device** — there is no upload, and no server ever sees them.
 | | Game Boy Advance | Nintendo DS |
 |---|---|---|
 | Core | IodineGBA (JavaScript) | melonDS (C++ → WebAssembly) |
-| Boot | HLE, no BIOS needed | DraStic FreeBIOS (clean-room) |
+| Boot | open-source replacement BIOS (GPLv2) | DraStic FreeBIOS (clean-room) |
 | Display | 240×160, nearest-neighbour upscale | dual screen |
 | Saves | in-browser (IndexedDB) | in-browser (IndexedDB) |
 
@@ -51,7 +51,11 @@ Writing an emulator is lawful — see *Sony Computer Entertainment v. Connectix*
 distributing copyrighted ROMs and firmware. So:
 
 - Games come from **you**, at runtime, from your own device.
-- The GBA core boots via high-level emulation, so no BIOS is required at all.
+- The GBA core uses the **open-source GBA BIOS replacement** from
+  [ez-me/gba-bios](https://github.com/ez-me/gba-bios) (GPLv2, VBA-M / Normmatt
+  lineage) — hand-written ARM assembly and C, not a dump of Nintendo's BIOS.
+  IodineGBA has no high-level-emulation path, so a BIOS image is mandatory; the
+  only question is whose, and this one is free software with public source.
 - The DS core uses **FreeBIOS**, a BSD-licensed clean-room reimplementation
   written from public documentation and explicitly not derived from Nintendo's
   BIOS.
@@ -69,9 +73,11 @@ see [`NOTICE.md`](NOTICE.md) and [`docs/REMOVED_MANIFEST.txt`](docs/REMOVED_MANI
 ## License
 
 **GPLv3** — see [`LICENSE`](LICENSE). The project incorporates melonDS (GPLv3),
-IodineGBA and XAudioJS (MIT, © Grant Galitz), and FreeBIOS (BSD-3-Clause,
-© Gilead Kutnick). MIT and BSD-3-Clause are GPL-compatible; every component keeps
-its own copyright notice. See [`NOTICE.md`](NOTICE.md).
+IodineGBA and XAudioJS (MIT, © Grant Galitz), DraStic FreeBIOS (BSD-3-Clause,
+© Gilead Kutnick), and the ez-me/gba-bios GBA BIOS replacement (GPLv2, shipped as
+a standalone data file rather than linked). MIT and BSD-3-Clause are
+GPL-compatible; every component keeps its own copyright notice. See
+[`NOTICE.md`](NOTICE.md).
 
 Not affiliated with, authorised by, or endorsed by Nintendo. Game Boy Advance and
 Nintendo DS are trademarks of Nintendo Co., Ltd.

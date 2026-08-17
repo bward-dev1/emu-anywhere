@@ -192,7 +192,14 @@ GfxGlueCode.prototype.setSmoothScaling = function (doSmoothing) {
 }
 GfxGlueCode.prototype.processSmoothing = function () {
     if (this.graphicsFound) {
-        this.canvas.className = (this.doSmoothing) ? "textureSmooth" : "texturePixelated";
+        //Upstream assigned canvas.className outright here. graphicsBlit() calls this on every
+        //size change, so it wiped the host app's own layout classes ("emulator-screen gba-screen")
+        //off the canvas a frame or two after they were added. With those gone the canvas had no
+        //height rule left, collapsed to 0px tall, and recomputeDimension() below then wrote that
+        //0 straight into canvas.height -- so the core rendered correctly into a zero-pixel
+        //surface and the screen stayed blank forever. Only toggle the two classes we own.
+        this.canvas.classList.toggle("textureSmooth", !!this.doSmoothing);
+        this.canvas.classList.toggle("texturePixelated", !this.doSmoothing);
         this.drawContextOnscreen.mozImageSmoothingEnabled = this.doSmoothing;
         this.drawContextOnscreen.webkitImageSmoothingEnabled = this.doSmoothing;
         this.drawContextOnscreen.imageSmoothingEnabled = this.doSmoothing;

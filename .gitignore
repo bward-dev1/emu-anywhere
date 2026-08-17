@@ -20,6 +20,7 @@ binaries/
 !wasmelonDS/freebios/drastic_bios_arm7.bin
 !wasmelonDS/freebios/drastic_bios_arm9.bin
 
-# ...and the MIT Cult-of-GBA replacement GBA BIOS is likewise a from-scratch
-# reimplementation, not a Nintendo dump. Legally redistributable. Keep it.
+# ...and the GPLv2 open-source GBA BIOS from ez-me/gba-bios is likewise a
+# from-scratch reimplementation, not a Nintendo dump. Legally redistributable
+# (full source: https://github.com/ez-me/gba-bios). Keep it.
 !frontend/public/static/gba/freebios/gba_freebios.bin

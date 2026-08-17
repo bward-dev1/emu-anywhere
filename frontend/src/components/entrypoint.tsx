@@ -81,15 +81,12 @@ export default function Entrypoint({ onStartEmulating, onOpenSettings }: Entrypo
         });
         await core.boot(romData);
       } else if (detectedSystem === 'gba') {
+        // Stage only. mGBA needs the live <canvas> at init time, so the actual
+        // boot happens inside <Emulator> once that canvas is in the document.
         const core = new GBACore();
-        try {
-          await core.boot(romData);
-          setLoading(false);
-          onStartEmulating(core, 'gba');
-        } catch (error) {
-          console.error('Failed to boot GBA:', error);
-          setLoading(false);
-        }
+        core.stageRom(romData, romFile.name);
+        setLoading(false);
+        onStartEmulating(core, 'gba');
       }
     } catch (error) {
       console.error('Error loading ROM:', error);

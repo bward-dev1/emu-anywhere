@@ -1,284 +1,181 @@
 import { EmuCore, InputButton } from './types';
 
+/**
+ * GBA core backed by mGBA compiled to WebAssembly (@thenick775/mgba-wasm).
+ *
+ * This replaces the previous IodineGBA implementation. Three reasons, in order
+ * of how much trouble they were causing:
+ *
+ * 1. NO BIOS REQUIRED. IodineGBA's Memory.js loadBIOS() refuses to initialize
+ *    unless it is handed exactly 0x4000 bytes ("Kill init, rather than allow
+ *    HLE for now"), so the only ways to boot were Nintendo's copyrighted BIOS
+ *    or hunting for a free replacement. mGBA implements the BIOS calls in HLE,
+ *    so it boots a cartridge with no Nintendo code and no third-party BIOS blob
+ *    anywhere in the repo. The whole legal question on the GBA side disappears.
+ * 2. THE CORE OWNS THE CANVAS. mGBA's SDL2 backing store is sized from the
+ *    canvas we hand it. We set 240x160 once, here, and let CSS scale the
+ *    element visually. Nothing in the render path ever writes layout-derived
+ *    numbers back into canvas.width/height, which is exactly the failure that
+ *    left GfxGlueCode blitting into a zero-pixel surface.
+ * 3. Accuracy and speed. mGBA is a mature C core; IodineGBA is interpreted JS.
+ *
+ * mGBA is MPL-2.0. MPL-2.0 section 3.3 explicitly permits distribution under a
+ * Secondary License (GPL), so it is compatible with the GPLv3 this project
+ * ships as. See NOTICE.md.
+ */
 export class GBACore implements EmuCore {
-  private emulator: any = null;
-  private blitter: any = null;
-  private mixer: any = null;
-  private mixerInput: any = null;
+  private module: any = null;
   private canvas: HTMLCanvasElement | null = null;
-  private coreTimerID: number | null = null;
-  private isPlaying: boolean = false;
-  private startTime: number = Date.now();
-  private isInitialized: boolean = false;
+  private booted: boolean = false;
+  private paused: boolean = false;
+  private stagedRom: Uint8Array | null = null;
+  private stagedName: string = 'game.gba';
 
-  async boot(rom: Uint8Array): Promise<void> {
-    if (this.isInitialized) {
-      throw new Error('GBA core already initialized');
-    }
-
-    // Load all GBA scripts
-    await this.loadGBAScripts();
-
-    // Create the emulator and give it a BIOS.
-    // IodineGBA does NOT support HLE: Memory.js loadBIOS() returns allowInit 0 unless
-    // it receives exactly 0x4000 bytes ("Kill init, rather than allow HLE for now").
-    // Setting SKIPBoot alone leaves the core refusing to initialize, which is why a
-    // ROM could be loaded and nothing would ever render. We attach the free,
-    // MIT-licensed Cult-of-GBA replacement BIOS (from-scratch ARM assembly, not a
-    // Nintendo dump). See static/gba/freebios/LICENSE.txt and NOTICE.md.
-    this.emulator = this.createEmulator();
-    this.emulator.attachBIOS(await this.loadFreeBIOS());
-    this.emulator.settings.SKIPBoot = true;
-
-    // We render on the main thread via GfxGlueCode (attachGraphicsFrameHandler below),
-    // not through IodineGBA's offthread Worker renderer, so make sure the core never
-    // tries to spin one up. (It would fall back to the main-thread renderer anyway,
-    // since GitHub Pages can't send the COOP/COEP headers SharedArrayBuffer requires,
-    // but disable it explicitly rather than rely on that fallback.)
-    this.emulator.settings.offthreadGfxEnabled = false;
-
-    // Emulator.prototype.play()/pause() call this.playStatusCallback(...) UNCONDITIONALLY
-    // (Emulator.js:67 and :75) -- there is no null check. Without a handler attached, the
-    // very first core.resume() throws "this.playStatusCallback is not a function" and the
-    // core silently dies right where the Start button expects the game to appear. Track
-    // our own isPlaying flag from the reported status rather than assuming resume()/pause()
-    // are the only callers that can change it.
-    this.emulator.attachPlayStatusHandler((status: number) => {
-      this.isPlaying = !!status;
-    });
-
-    // Create graphics handler
-    this.createCanvas();
-    this.blitter = new (window as any).GfxGlueCode(240, 160);
-    this.blitter.attachCanvas(this.canvas);
-    this.blitter.setSmoothScaling(false); // Use pixel-perfect rendering
-    this.emulator.attachGraphicsFrameHandler(this.blitter);
-
-    // Create audio handler
-    const audioContext = this.createAudioContext();
-    this.mixer = new (window as any).GlueCodeMixer(audioContext);
-    this.mixerInput = new (window as any).GlueCodeMixerInput(this.mixer);
-    this.emulator.attachAudioHandler(this.mixerInput);
-
-    // Attach ROM
-    this.emulator.attachROM(rom);
-
-    // Skip the BIOS boot animation and jump straight to the cartridge entry point.
-    this.emulator.settings.SKIPBoot = true;
-
-    // Start the timer
-    this.startTimer();
-
-    this.isInitialized = true;
+  /**
+   * Hold the ROM without booting.
+   *
+   * mGBA needs the real <canvas> at module-init time, and that canvas does not
+   * exist until <Emulator> has rendered. The entrypoint therefore stages the
+   * ROM here and the view calls attachCanvas() + boot() once its canvas is in
+   * the document. Booting first and re-parenting a detached canvas afterwards
+   * is what produced two elements with id="gba-canvas" and a DOM subtree Preact
+   * thought it still owned.
+   */
+  stageRom(rom: Uint8Array, filename: string = 'game.gba'): void {
+    this.stagedRom = rom;
+    this.stagedName = filename;
   }
 
-  private createCanvas(): void {
-    this.canvas = document.createElement('canvas');
-    this.canvas.id = 'gba-canvas';
-    this.canvas.width = 240;
-    this.canvas.height = 160;
-    this.canvas.style.width = '100%';
-    this.canvas.style.height = '100%';
-    this.canvas.style.display = 'block';
-    this.canvas.style.imageRendering = 'pixelated';
+  /**
+   * Adopt the canvas the view already rendered, rather than creating a detached
+   * one and swapping it into the DOM later.
+   *
+   * The old code built its own <canvas> in JS, and the view then wiped
+   * .emulator-container's innerHTML and appended it -- which left two elements
+   * claiming id="gba-canvas" and handed Preact a subtree it no longer owned.
+   * Sizing the backing store here, at attach time, and never again is the
+   * "core owns the dimensions, CSS owns the presentation" discipline.
+   */
+  attachCanvas(canvas: HTMLCanvasElement): void {
+    this.canvas = canvas;
+    canvas.width = 240;
+    canvas.height = 160;
   }
 
   getCanvas(): HTMLCanvasElement {
-    if (!this.canvas) {
-      throw new Error('Canvas not initialized');
-    }
+    if (!this.canvas) throw new Error('Canvas not attached');
     return this.canvas;
   }
 
-  private async loadGBAScripts(): Promise<void> {
-    const scripts = [
-      '/static/gba/base64.js',
-      '/static/gba/iodineGBA/core/Emulator.js',
-      '/static/gba/iodineGBA/includes/TypedArrayShim.js',
-      '/static/gba/iodineGBA/core/Memory.js',
-      '/static/gba/iodineGBA/core/CPU.js',
-      '/static/gba/iodineGBA/core/CPU/ARM.js',
-      '/static/gba/iodineGBA/core/CPU/THUMB.js',
-      '/static/gba/iodineGBA/core/CPU/CPSR.js',
-      '/static/gba/iodineGBA/core/Wait.js',
-      '/static/gba/iodineGBA/core/Timer.js',
-      '/static/gba/iodineGBA/core/DMA.js',
-      '/static/gba/iodineGBA/core/memory/DMA0.js',
-      '/static/gba/iodineGBA/core/memory/DMA1.js',
-      '/static/gba/iodineGBA/core/memory/DMA2.js',
-      '/static/gba/iodineGBA/core/memory/DMA3.js',
-      '/static/gba/iodineGBA/core/IRQ.js',
-      '/static/gba/iodineGBA/core/JoyPad.js',
-      '/static/gba/iodineGBA/core/Serial.js',
-      '/static/gba/iodineGBA/core/Sound.js',
-      '/static/gba/iodineGBA/core/sound/Channel1.js',
-      '/static/gba/iodineGBA/core/sound/Channel2.js',
-      '/static/gba/iodineGBA/core/sound/Channel3.js',
-      '/static/gba/iodineGBA/core/sound/Channel4.js',
-      '/static/gba/iodineGBA/core/sound/FIFO.js',
-      '/static/gba/iodineGBA/core/Cartridge.js',
-      '/static/gba/iodineGBA/core/cartridge/SaveDeterminer.js',
-      '/static/gba/iodineGBA/core/cartridge/SRAM.js',
-      '/static/gba/iodineGBA/core/cartridge/FLASH.js',
-      '/static/gba/iodineGBA/core/cartridge/EEPROM.js',
-      '/static/gba/iodineGBA/core/cartridge/GPIO.js',
-      '/static/gba/iodineGBA/core/Graphics.js',
-      '/static/gba/iodineGBA/core/graphics/Renderer.js',
-      '/static/gba/iodineGBA/core/graphics/RendererProxy.js',
-      '/static/gba/iodineGBA/core/graphics/RendererShim.js',
-      '/static/gba/iodineGBA/core/graphics/BGMatrix.js',
-      '/static/gba/iodineGBA/core/graphics/BGTEXT.js',
-      '/static/gba/iodineGBA/core/graphics/AffineBG.js',
-      '/static/gba/iodineGBA/core/graphics/BG2FrameBuffer.js',
-      '/static/gba/iodineGBA/core/graphics/OBJ.js',
-      '/static/gba/iodineGBA/core/graphics/Window.js',
-      '/static/gba/iodineGBA/core/graphics/OBJWindow.js',
-      '/static/gba/iodineGBA/core/graphics/Mosaic.js',
-      '/static/gba/iodineGBA/core/graphics/ColorEffects.js',
-      '/static/gba/iodineGBA/core/graphics/Compositor.js',
-      '/static/gba/iodineGBA/core/RunLoop.js',
-      '/static/gba/iodineGBA/core/Saves.js',
-      // NOTE: core/Worker.js and core/graphics/Worker.js are intentionally NOT loaded here.
-      // Both start with a top-level `importScripts(...)` call, which only exists inside a
-      // real Web Worker global scope. Loaded as a plain <script> on the main thread it throws
-      // "importScripts is not defined" the instant it runs. They're only meant to be spawned
-      // via `new Worker(...)` by RendererShim.js's offthread path, which we disable above.
-      '/static/gba/ROMLoadGlueCode.js',
-      '/static/gba/GfxGlueCode.js',
-      '/static/gba/XAudioJS/XAudioServer.js',
-      '/static/gba/XAudioJS/resampler.js',
-      '/static/gba/AudioGlueCode.js',
-      '/static/gba/JoyPadGlueCode.js',
-      '/static/gba/SavesGlueCode.js',
-    ];
+  async boot(rom?: Uint8Array, filename?: string): Promise<void> {
+    if (this.booted) throw new Error('GBA core already initialized');
+    if (!this.canvas) throw new Error('Canvas not attached before boot');
 
-    for (const script of scripts) {
-      await this.loadScript(script);
-    }
-  }
+    const romData = rom ?? this.stagedRom;
+    if (!romData) throw new Error('No ROM staged or supplied');
+    const romName = filename ?? this.stagedName;
 
-  private async loadFreeBIOS(): Promise<Uint8Array> {
-    const url = new URL('static/gba/freebios/gba_freebios.bin', document.baseURI).href;
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Failed to load GBA BIOS (${res.status}) from ${url}`);
-    }
-    const bios = new Uint8Array(await res.arrayBuffer());
-    if (bios.length !== 0x4000) {
-      throw new Error(`GBA BIOS must be exactly 16384 bytes, got ${bios.length}`);
-    }
-    return bios;
-  }
+    const mGBA = (await import('@thenick775/mgba-wasm')).default as any;
 
-  private loadScript(src: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      // Resolve against the document base. Vite is configured with base './' so the
-      // app can be hosted under a sub-path (GitHub Pages project sites); a leading
-      // '/' would resolve to the domain root there and 404 every core script.
-      script.src = new URL(src.replace(/^\//, ''), document.baseURI).href;
-      script.async = false;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-      document.head.appendChild(script);
+    this.module = await mGBA({
+      canvas: this.canvas,
+      // Vite is configured with base './' so the app can live under a GitHub
+      // Pages project sub-path. A bare '/cores/mgba.wasm' would resolve to the
+      // domain root there and 404, taking the whole core down with it.
+      locateFile: (path: string) =>
+        path.endsWith('.wasm')
+          ? new URL('cores/mgba.wasm', document.baseURI).href
+          : path
     });
-  }
 
-  private createEmulator(): any {
-    // Try to create the emulator using the GameBoyAdvanceEmulator constructor
-    // The emulator should be available from the loaded scripts
-    const EmulatorClass = (window as any).GameBoyAdvanceEmulator;
-    if (!EmulatorClass) {
-      throw new Error('GameBoyAdvanceEmulator not found in window');
+    await this.module.FSInit();
+
+    const paths = this.module.filePaths();
+    const gamePath = `${paths.gamePath}/${romName}`;
+    this.module.FS.writeFile(gamePath, romData);
+
+    if (!this.module.loadGame(gamePath)) {
+      throw new Error(`mGBA failed to load ROM: ${romName}`);
     }
-    return new EmulatorClass();
-  }
 
-  private createAudioContext(): any {
-    // GlueCodeMixer forwards this straight through to XAudioServer as `userEventLatch`
-    // (see XAudioJS/XAudioServer.js). XAudioServer never calls play()/pause() on it or
-    // otherwise treats it as an <audio> element -- it only attaches 'click'/'touchstart'/
-    // 'touchend' listeners to it to lazily create the real Web Audio AudioContext on a user
-    // gesture (working around autoplay-policy restrictions). A detached, display:none
-    // <audio> element never receives such a gesture, so audio would never initialize and the
-    // game would run permanently silent. document.body does receive the bubbled click/touch
-    // from whatever button the user presses to start playing, so audio actually unlocks.
-    return document.body;
-  }
-
-  private startTimer(): void {
-    if (this.coreTimerID !== null) {
-      clearInterval(this.coreTimerID);
-    }
-    this.coreTimerID = window.setInterval(() => {
-      if (this.emulator && this.isPlaying) {
-        this.emulator.timerCallback((Date.now() - this.startTime) >>> 0);
-      }
-    }, 8);
+    this.stagedRom = null;
+    this.booted = true;
+    this.paused = false;
   }
 
   pause(): void {
-    if (this.emulator) {
-      this.isPlaying = false;
-      this.emulator.pause();
+    if (this.module && !this.paused) {
+      this.module.pauseGame();
+      this.paused = true;
     }
   }
 
   resume(): void {
-    if (this.emulator) {
-      this.isPlaying = true;
-      this.emulator.play();
+    if (this.module && this.paused) {
+      this.module.resumeGame();
+      this.paused = false;
     }
   }
 
   setButton(btn: InputButton, pressed: boolean): void {
-    if (!this.emulator) return;
+    if (!this.module) return;
 
-    // Map button names to GBA key indices
-    const buttonMap: Record<string, number> = {
-      'A': 0,
-      'B': 1,
-      'SELECT': 2,
-      'START': 3,
-      'DPAD_RIGHT': 4,
-      'DPAD_LEFT': 5,
-      'DPAD_UP': 6,
-      'DPAD_DOWN': 7,
-      'R': 8,
-      'L': 9,
+    // mGBA takes human-readable button names, not key indices.
+    const buttonMap: Record<string, string> = {
+      'A': 'A',
+      'B': 'B',
+      'SELECT': 'Select',
+      'START': 'Start',
+      'DPAD_UP': 'Up',
+      'DPAD_DOWN': 'Down',
+      'DPAD_LEFT': 'Left',
+      'DPAD_RIGHT': 'Right',
+      'L': 'L',
+      'R': 'R'
+      // X/Y are DS-only and have no GBA equivalent -- deliberately unmapped.
     };
 
-    const keyIndex = buttonMap[btn];
-    if (keyIndex !== undefined) {
-      if (pressed) {
-        this.emulator.keyDown(keyIndex);
-      } else {
-        this.emulator.keyUp(keyIndex);
-      }
+    const name = buttonMap[btn];
+    if (!name) return;
+
+    if (pressed) {
+      this.module.buttonPress(name);
+    } else {
+      this.module.buttonUnpress(name);
     }
   }
 
   setSpeed(multiplier: number): void {
-    if (this.emulator) {
-      this.emulator.setSpeed(multiplier);
+    if (!this.module) return;
+    if (typeof this.module.setFastForwardMultiplier === 'function') {
+      this.module.setFastForwardMultiplier(multiplier);
+    } else if (typeof this.module.setFastForward === 'function') {
+      this.module.setFastForward(multiplier);
+    }
+  }
+
+  reset(): void {
+    if (this.module && typeof this.module.quickReload === 'function') {
+      this.module.quickReload();
     }
   }
 
   destroy(): void {
-    if (this.coreTimerID !== null) {
-      clearInterval(this.coreTimerID);
-      this.coreTimerID = null;
+    if (this.module) {
+      try {
+        this.module.quitGame();
+      } catch {
+        // quitGame throws if no game was ever loaded -- nothing to clean up then.
+      }
+      this.module = null;
     }
-    if (this.canvas && this.canvas.parentNode) {
-      this.canvas.parentNode.removeChild(this.canvas);
-    }
-    this.isInitialized = false;
-    this.isPlaying = false;
+    this.canvas = null;
+    this.booted = false;
+    this.paused = false;
   }
 
   getGameTitle(): string | null {
-    // IodineGBA doesn't expose a direct getGameTitle method like melonDS
-    // Return a generic title for now
-    return null;
+    if (!this.module) return null;
+    return this.module.gameName || null;
   }
 }

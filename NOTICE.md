@@ -15,10 +15,19 @@ because it incorporates melonDS, which is GPLv3. See `LICENSE`.
 | `gba-core/XAudioJS/` | taisel/XAudioJS | MIT | Audio output shim for the GBA core |
 | `gba-core/*GlueCode.js` | ayvacs/gba.js.org | MIT | Glue layer, **heavily modified** — see "Legal remediation" |
 | `wasmelonDS/freebios/` | DraStic FreeBIOS, © 2013 Gilead Kutnick | BSD-3-Clause | Clean-room DS BIOS replacement, **not** derived from Nintendo's BIOS |
-| `frontend/public/static/gba/freebios/` | Cult-of-GBA BIOS, © 2020–2021 DenSinH and fleroviux | MIT | Clean-room GBA BIOS replacement, written from scratch in ARM assembly, **not** derived from Nintendo's BIOS. sha1 `2e41f9d30ecdf1c4540edf89ac16f49bf327edb7` |
+| `frontend/public/static/gba/freebios/` | ez-me/gba-bios (VBA-M / Normmatt lineage), via ReGBA | GPLv2 | Open-source GBA BIOS replacement, hand-written ARM assembly + C, **not** derived from Nintendo's BIOS. sha1 `598c0b2c6c5d15bbba218773574c9e7856d141f3`. Shipped as a standalone data file, aggregated rather than linked — see below |
 
 MIT and BSD-3-Clause are both GPLv3-compatible, so the combined distribution
 under GPLv3 is valid. Each component retains its own copyright notice.
+
+The GBA replacement BIOS is GPLv2 (no "or later" clause), which cannot be
+*combined* with GPLv3 code into a single linked work. It is not combined with
+one here. It is a standalone ARM program for the emulated console, shipped as a
+16 KB data file and copied into emulated memory at runtime; no emulator code
+links against it and it links against no emulator code. That is aggregation on a
+shared distribution medium, which both licenses permit. It lives in its own
+directory with its own unmodified GPLv2 text, and its complete corresponding
+source is public at https://github.com/ez-me/gba-bios.
 
 ## Legal remediation performed during the merge
 
@@ -47,8 +56,8 @@ no upstream history was carried over.
    picker or drag-and-drop. Files are read in-browser and never uploaded.
 2. **No Nintendo BIOS ships.** Both cores boot on clean-room BIOS replacements:
    the DS core uses the BSD-licensed DraStic FreeBIOS, and the GBA core uses the
-   MIT-licensed Cult-of-GBA FreeBIOS. A user may optionally supply their own
-   legally-dumped BIOS instead.
+   GPLv2-licensed open-source BIOS from ez-me/gba-bios. A user may optionally
+   supply their own legally-dumped BIOS instead.
 
    Note on the GBA core specifically: IodineGBA does **not** support high-level
    emulation. Its `Memory.js loadBIOS()` refuses to initialise unless handed
