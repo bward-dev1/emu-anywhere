@@ -11,7 +11,8 @@ because it incorporates melonDS, which is GPLv3. See `LICENSE`.
 | `wasmelonDS/` | melonDS, via bward-dev1/ds-anywhere | GPLv3 | Nintendo DS core, compiled to WebAssembly via Emscripten |
 | `webmelon-sdk/` | bward-dev1/ds-anywhere | GPLv3 | TypeScript bindings between WASM and the frontend |
 | `frontend/` | bward-dev1/ds-anywhere | GPLv3 | Preact + Vite + Tailwind + daisyUI UI |
-| `gba-core/iodineGBA/` | taisel/IodineGBA, © 2010–2017 Grant Galitz | MIT | Game Boy Advance core, pure JavaScript |
+| `@thenick775/mgba-wasm` (npm) | mGBA, © endrift and contributors | MPL-2.0 | Game Boy Advance core, C compiled to WebAssembly. **Current GBA core.** |
+| `gba-core/iodineGBA/` | taisel/IodineGBA, © 2010–2017 Grant Galitz | MIT | Previous Game Boy Advance core, pure JavaScript. Retained but no longer used at runtime — see "GBA core change" |
 | `gba-core/XAudioJS/` | taisel/XAudioJS | MIT | Audio output shim for the GBA core |
 | `gba-core/*GlueCode.js` | ayvacs/gba.js.org | MIT | Glue layer, **heavily modified** — see "Legal remediation" |
 | `wasmelonDS/freebios/` | DraStic FreeBIOS, © 2013 Gilead Kutnick | BSD-3-Clause | Clean-room DS BIOS replacement, **not** derived from Nintendo's BIOS |
@@ -19,6 +20,30 @@ because it incorporates melonDS, which is GPLv3. See `LICENSE`.
 
 MIT and BSD-3-Clause are both GPLv3-compatible, so the combined distribution
 under GPLv3 is valid. Each component retains its own copyright notice.
+
+MPL-2.0 (mGBA) is likewise compatible: section 3.3 of the MPL explicitly permits
+distributing the Covered Software under a Secondary License, and the GPL is
+named as one. mGBA's own source stays under the MPL and remains available from
+https://github.com/mgba-emu/mgba.
+
+### GBA core change
+
+The GBA side now runs mGBA compiled to WebAssembly rather than IodineGBA. The
+reason is as much legal as technical: **mGBA implements the GBA BIOS calls in
+high-level emulation, so it boots a cartridge with no BIOS image at all.**
+
+That removes the hardest remaining question in this project. IodineGBA cannot do
+this — its `Memory.js loadBIOS()` sets `allowInit = 0` unless handed exactly
+0x4000 bytes ("Kill init, rather than allow HLE for now"), so *some* BIOS binary
+was mandatory and the only question was whose. With mGBA there is no BIOS blob
+on the GBA path to license, aggregate, or explain.
+
+The GPLv2 replacement BIOS at `frontend/public/static/gba/freebios/` is
+consequently unused at runtime. It is retained for now only as a fallback while
+the mGBA path is being verified, and the aggregation argument below applies only
+to it. Once mGBA is confirmed running a real cartridge, that file and the
+IodineGBA core should both be deleted outright, at which point the GBA side
+carries no BIOS and no GPLv2 component whatsoever.
 
 The GBA replacement BIOS is GPLv2 (no "or later" clause), which cannot be
 *combined* with GPLv3 code into a single linked work. It is not combined with
@@ -54,10 +79,10 @@ no upstream history was carried over.
 
 1. **No ROMs ship.** The user supplies their own game files at runtime via a file
    picker or drag-and-drop. Files are read in-browser and never uploaded.
-2. **No Nintendo BIOS ships.** Both cores boot on clean-room BIOS replacements:
-   the DS core uses the BSD-licensed DraStic FreeBIOS, and the GBA core uses the
-   GPLv2-licensed open-source BIOS from ez-me/gba-bios. A user may optionally
-   supply their own legally-dumped BIOS instead.
+2. **No Nintendo BIOS ships.** The DS core boots on the BSD-licensed DraStic
+   FreeBIOS, a clean-room replacement. The GBA core needs no BIOS at all — mGBA
+   emulates the BIOS calls in HLE. A user may optionally supply their own
+   legally-dumped BIOS instead, on either console.
 
    Note on the GBA core specifically: IodineGBA does **not** support high-level
    emulation. Its `Memory.js loadBIOS()` refuses to initialise unless handed

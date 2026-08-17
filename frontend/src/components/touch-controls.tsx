@@ -5,6 +5,12 @@ import './touch-controls.css';
 interface TouchControlsProps {
   system: 'nds' | 'gba';
   onInput: (btn: string, pressed: boolean) => void;
+  /**
+   * Button size multiplier. Fed straight into the --btn-scale custom property;
+   * every dimension in touch-controls.css is a calc() off that one value, so
+   * the whole pad grows and shrinks together without a second layout path.
+   */
+  buttonScale?: number;
 }
 
 interface PressedButtons {
@@ -59,7 +65,7 @@ const detectAutoVisible = (): boolean => {
   return window.matchMedia(AUTO_DETECT_QUERY).matches;
 };
 
-const TouchControls: FunctionComponent<TouchControlsProps> = ({ system, onInput }) => {
+const TouchControls: FunctionComponent<TouchControlsProps> = ({ system, onInput, buttonScale = 1 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [override, setOverride] = useState<OverridePref>(() => readStoredOverride());
   const [autoVisible, setAutoVisible] = useState<boolean>(() => detectAutoVisible());
@@ -208,6 +214,7 @@ const TouchControls: FunctionComponent<TouchControlsProps> = ({ system, onInput 
     <div
       ref={containerRef}
       className={`touch-controls ${isVisible ? 'visible' : 'hidden'}`}
+      style={{ '--btn-scale': String(buttonScale) } as any}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -215,17 +222,22 @@ const TouchControls: FunctionComponent<TouchControlsProps> = ({ system, onInput 
     >
       <div className="controls-container">
         <div className="dpad-area">
+          {/* Decorative centre boss of the cross. The cross arms themselves are
+              drawn as ::before/::after on .dpad-area -- see touch-controls.css. */}
+          <div className="dpad-center" />
           <button data-button="up" className={`dpad-button dpad-up ${pressedButtons.up ? 'pressed' : ''}`} />
           <button data-button="left" className={`dpad-button dpad-left ${pressedButtons.left ? 'pressed' : ''}`} />
           <button data-button="down" className={`dpad-button dpad-down ${pressedButtons.down ? 'pressed' : ''}`} />
           <button data-button="right" className={`dpad-button dpad-right ${pressedButtons.right ? 'pressed' : ''}`} />
         </div>
 
-        <div className="face-buttons-area">
+        <div className={`face-buttons-area ${system === 'nds' ? 'layout-nds' : 'layout-gba'}`}>
           {system === 'nds' && (
             <>
-              <button data-button="y" className={`face-button face-y ${pressedButtons.y ? 'pressed' : ''}`} />
+              {/* X top, Y left -- real DS hardware. Source order is irrelevant
+                  here; the CSS positions all four absolutely. */}
               <button data-button="x" className={`face-button face-x ${pressedButtons.x ? 'pressed' : ''}`} />
+              <button data-button="y" className={`face-button face-y ${pressedButtons.y ? 'pressed' : ''}`} />
             </>
           )}
           <button data-button="b" className={`face-button face-b ${pressedButtons.b ? 'pressed' : ''}`} />

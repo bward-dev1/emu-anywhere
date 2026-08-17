@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
 import './emulator.css';
-import { LuChevronsRight, LuPause, LuSettings, LuX } from 'react-icons/lu';
+import { LuChevronsRight, LuMove, LuPause, LuSettings, LuX } from 'react-icons/lu';
+import {
+  useDisplaySettings,
+  SCREEN_SCALE_MIN,
+  SCREEN_SCALE_MAX,
+  BUTTON_SCALE_MIN,
+  BUTTON_SCALE_MAX
+} from '../display-settings';
 import { EmuCore, System } from '../cores/types';
 import TouchControls from './touch-controls';
 
@@ -19,6 +26,15 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
   const [fastForward, setFastForward] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const gbaCanvasRef = useRef<HTMLCanvasElement>(null);
+  const screenStageRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
+
+  const { settings, update, reset } = useDisplaySettings();
+  // Dragging the picture around and playing a DS game are the same gesture, so
+  // repositioning is gated behind an explicit mode instead of being always-on.
+  // Without this, every stylus tap on the DS bottom screen would slide the
+  // whole display instead of reaching the game.
+  const [layoutMode, setLayoutMode] = useState(false);
 
   const shutdownListener = () => {
     stopEmulating();
@@ -115,6 +131,37 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
     }
   }, [started, system, core]);
 
+  const beginDrag = (e: PointerEvent) => {
+    if (!layoutMode || !screenStageRef.current) return;
+    e.preventDefault();
+    screenStageRef.current.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: settings.screenOffsetX,
+      originY: settings.screenOffsetY
+    };
+  };
+
+  const continueDrag = (e: PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    update({
+      screenOffsetX: drag.originX + (e.clientX - drag.startX),
+      screenOffsetY: drag.originY + (e.clientY - drag.startY)
+    });
+  };
+
+  const endDrag = (e: PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (screenStageRef.current?.hasPointerCapture(e.pointerId)) {
+      screenStageRef.current.releasePointerCapture(e.pointerId);
+    }
+    dragRef.current = null;
+  };
+
   const handleTouchInput = (btn: string, pressed: boolean) => {
     // Convert lowercase button names from touch controls to uppercase names
     const buttonMap: { [key: string]: string } = {
@@ -150,6 +197,14 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
               <LuX size={'1.5em'} />
             </button>
           </div>
+          <div className="tooltip" data-tip={layoutMode ? 'Done adjusting' : 'Move / resize screen'}>
+            <button
+              className={layoutMode ? 'btn btn-square btn-primary' : 'btn btn-square'}
+              onClick={() => setLayoutMode(!layoutMode)}
+            >
+              <LuMove size={'1.5em'} />
+            </button>
+          </div>
           <div className="tooltip" data-tip="Settings">
             <button className="btn btn-square" onClick={openSettings}>
               <LuSettings size={'1.5em'} />
@@ -173,6 +228,21 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
           </div>
         </div>
       </div>
+      <div
+        ref={screenStageRef}
+        className={`screen-stage ${layoutMode ? 'layout-mode' : ''}`}
+        style={{
+          // A compositor transform, not a resize. The canvas backing store stays
+          // exactly 240x160 (GBA) / 256x192 (DS) no matter what the user does
+          // here, which is what keeps the picture sharp and keeps this control
+          // from ever being able to collapse a canvas to zero pixels.
+          transform: `translate(${settings.screenOffsetX}px, ${settings.screenOffsetY}px) scale(${settings.screenScale})`
+        }}
+        onPointerDown={beginDrag}
+        onPointerMove={continueDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
       <div className="emulator-container">
         {system === 'nds' ? (
           <>
@@ -185,10 +255,49 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
           </>
         )}
       </div>
+      </div>
+      {layoutMode && (
+        <div className="layout-panel">
+          <label>
+            <span>Screen size</span>
+            <input
+              type="range"
+              min={SCREEN_SCALE_MIN}
+              max={SCREEN_SCALE_MAX}
+              step={0.05}
+              value={settings.screenScale}
+              onInput={(e) => update({ screenScale: Number((e.target as HTMLInputElement).value) })}
+            />
+            <span className="layout-panel-value">{settings.screenScale.toFixed(2)}x</span>
+          </label>
+          <label>
+            <span>Button size</span>
+            <input
+              type="range"
+              min={BUTTON_SCALE_MIN}
+              max={BUTTON_SCALE_MAX}
+              step={0.05}
+              value={settings.buttonScale}
+              onInput={(e) => update({ buttonScale: Number((e.target as HTMLInputElement).value) })}
+            />
+            <span className="layout-panel-value">{settings.buttonScale.toFixed(2)}x</span>
+          </label>
+          <label className="layout-panel-toggle">
+            <span>Eco mode</span>
+            <input
+              type="checkbox"
+              checked={settings.ecoMode}
+              onChange={(e) => update({ ecoMode: (e.target as HTMLInputElement).checked })}
+            />
+          </label>
+          <p className="layout-panel-hint">Drag the screen to move it.</p>
+          <button className="btn btn-sm" onClick={reset}>Reset layout</button>
+        </div>
+      )}
       {bootError && (
         <div className="emulator-boot-error">Could not start this ROM: {bootError}</div>
       )}
-      <TouchControls system={system} onInput={handleTouchInput} />
+      <TouchControls system={system} onInput={handleTouchInput} buttonScale={settings.buttonScale} />
     </>
   )
 }

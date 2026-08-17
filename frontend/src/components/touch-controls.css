@@ -1,9 +1,38 @@
+/*
+ * Touch control visuals.
+ *
+ * The input engine (pointer capture, multitouch, slide-between-buttons,
+ * press ref-counting) lives in touch-controls.tsx and is deliberately
+ * unchanged -- it is better than the per-button onTouchStart handlers in the
+ * repo this look was lifted from. What changed here is only presentation:
+ * a real cross D-pad instead of four detached squares, an authentic face-button
+ * arrangement per console, shoulder buttons shaped like shoulder buttons, and
+ * a press animation.
+ *
+ * Every dimension is derived from --btn-scale so the whole pad can be resized
+ * from settings without touching a single hard-coded pixel value below.
+ */
+
 .touch-controls {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   top: 0;
+
+  /* Button size multiplier, overridden inline from the settings store. */
+  --btn-scale: 1;
+
+  --dpad-size: calc(132px * var(--btn-scale));
+  --dpad-arm: calc(46px * var(--btn-scale));
+  --dpad-thick: calc(40px * var(--btn-scale));
+  --face-area: calc(132px * var(--btn-scale));
+  --face-size: calc(48px * var(--btn-scale));
+  --shoulder-w: calc(96px * var(--btn-scale));
+  --shoulder-h: calc(40px * var(--btn-scale));
+  --pill-w: calc(58px * var(--btn-scale));
+  --pill-h: calc(26px * var(--btn-scale));
+
   /*
    * The overlay itself never intercepts anything. Only the actual button
    * elements opt back in (below, gated on .visible). This is what lets
@@ -27,12 +56,11 @@
   left: 0;
   right: 0;
   width: 100%;
-  height: auto;
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  padding: 0 20px;
-  gap: 20px;
+  align-items: center;
+  padding: 0 calc(16px * var(--btn-scale));
+  gap: calc(12px * var(--btn-scale));
   box-sizing: border-box;
   opacity: 1;
   transition: opacity 0.15s ease;
@@ -51,10 +79,10 @@
   right: max(10px, env(safe-area-inset-right));
   width: 44px;
   height: 44px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
   font-size: 20px;
   cursor: pointer;
   display: flex;
@@ -68,75 +96,168 @@
 }
 
 .toggle-controls-btn:active {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(15, 23, 42, 0.95);
 }
+
+/* ---------------------------------------------------------------- D-PAD -- */
 
 .dpad-area {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: var(--dpad-size);
+  height: var(--dpad-size);
   flex-shrink: 0;
+}
+
+/*
+ * The visible cross is two overlapping bars drawn as pseudo-elements on the
+ * container, not on the buttons. The buttons themselves are transparent hit
+ * zones laid over the arms -- that keeps the diagonal corners of the bounding
+ * box pointer-events: none, so a thumb that drifts off the cross falls through
+ * to the screen underneath instead of eating the touch.
+ */
+.dpad-area::before,
+.dpad-area::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(30, 41, 59, 0.92);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: calc(10px * var(--btn-scale));
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.dpad-area::before {
+  width: calc(var(--dpad-thick) + var(--dpad-arm) * 2);
+  height: var(--dpad-thick);
+}
+
+.dpad-area::after {
+  width: var(--dpad-thick);
+  height: calc(var(--dpad-thick) + var(--dpad-arm) * 2);
+}
+
+.dpad-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: calc(13px * var(--btn-scale));
+  height: calc(13px * var(--btn-scale));
+  border-radius: 50%;
+  background: rgba(51, 65, 85, 0.95);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .dpad-button {
   position: absolute;
-  width: 40px;
-  height: 40px;
-  background: rgba(100, 100, 100, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
+  background: transparent;
+  border: none;
+  padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: calc(9px * var(--btn-scale));
+  transition: background-color 75ms ease;
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  z-index: 2;
 }
 
-.dpad-button:active,
+/* Arrow glyphs, drawn as CSS triangles so there's no icon-font dependency. */
+.dpad-button::after {
+  content: '';
+  border-style: solid;
+  border-color: transparent;
+  opacity: 0.55;
+  transition: opacity 75ms ease;
+}
+
 .dpad-button.pressed {
-  background: rgba(150, 150, 150, 0.8);
-  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(99, 102, 241, 0.35);
 }
 
-.dpad-up {
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
+.dpad-button.pressed::after {
+  opacity: 1;
 }
 
+.dpad-up,
 .dpad-down {
-  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
+  width: var(--dpad-thick);
+  height: calc(var(--dpad-arm) + var(--dpad-thick) / 2);
 }
 
-.dpad-left {
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
+.dpad-left,
 .dpad-right {
-  right: 0;
   top: 50%;
   transform: translateY(-50%);
+  width: calc(var(--dpad-arm) + var(--dpad-thick) / 2);
+  height: var(--dpad-thick);
 }
 
+.dpad-up { top: 0; align-items: flex-start; padding-top: calc(9px * var(--btn-scale)); }
+.dpad-down { bottom: 0; align-items: flex-end; padding-bottom: calc(9px * var(--btn-scale)); }
+.dpad-left { left: 0; justify-content: flex-start; padding-left: calc(9px * var(--btn-scale)); }
+.dpad-right { right: 0; justify-content: flex-end; padding-right: calc(9px * var(--btn-scale)); }
+
+.dpad-up::after {
+  border-width: 0 calc(8px * var(--btn-scale)) calc(11px * var(--btn-scale));
+  border-bottom-color: #cbd5e1;
+}
+
+.dpad-down::after {
+  border-width: calc(11px * var(--btn-scale)) calc(8px * var(--btn-scale)) 0;
+  border-top-color: #cbd5e1;
+}
+
+.dpad-left::after {
+  border-width: calc(8px * var(--btn-scale)) calc(11px * var(--btn-scale)) calc(8px * var(--btn-scale)) 0;
+  border-right-color: #cbd5e1;
+}
+
+.dpad-right::after {
+  border-width: calc(8px * var(--btn-scale)) 0 calc(8px * var(--btn-scale)) calc(11px * var(--btn-scale));
+  border-left-color: #cbd5e1;
+}
+
+/* --------------------------------------------------------- FACE BUTTONS -- */
+
+/*
+ * Positioned absolutely inside a square, not stacked in a column, so each
+ * console gets its real arrangement:
+ *
+ *   GBA  -- A and B side by side on a slight diagonal, A upper-right,
+ *           exactly as they sit on the hardware.
+ *   DS   -- the four-button diamond: X top, Y left, A right, B bottom.
+ *
+ * Note the DS layout differs from the repo this was lifted from, which had Y
+ * on top and X on the bottom. That is inverted relative to real DS (and SNES)
+ * hardware, and would make every in-game button prompt wrong.
+ */
 .face-buttons-area {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-end;
+  position: relative;
+  width: var(--face-area);
+  height: var(--face-area);
   flex-shrink: 0;
 }
 
+.face-buttons-area.layout-gba {
+  transform: rotate(-20deg);
+}
+
 .face-button {
-  width: 44px;
-  height: 44px;
+  position: absolute;
+  width: var(--face-size);
+  height: var(--face-size);
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -144,50 +265,52 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  font-weight: bold;
-  font-size: 14px;
+  font-weight: 900;
+  font-size: calc(15px * var(--btn-scale));
+  color: #e2e8f0;
+  background: linear-gradient(to bottom, rgba(51, 65, 85, 0.95), rgba(30, 41, 59, 0.95));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 75ms ease, background-color 75ms ease, box-shadow 75ms ease;
 }
 
-.face-button:active,
+/* Counter-rotate the labels so the GBA tilt doesn't tilt the letters too. */
+.layout-gba .face-button { transform: rotate(20deg); }
+.layout-gba .face-button.pressed { transform: rotate(20deg) scale(0.9); }
+
 .face-button.pressed {
-  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(0.9);
+  color: #fff;
 }
 
-.face-a {
-  background: rgba(200, 100, 100, 0.6);
-}
+.face-a::after { content: 'A'; }
+.face-b::after { content: 'B'; }
+.face-x::after { content: 'X'; }
+.face-y::after { content: 'Y'; }
 
-.face-a:active,
-.face-a.pressed {
-  background: rgba(220, 120, 120, 0.8);
-}
+/* DS diamond */
+.layout-nds .face-a { right: 0; top: 50%; margin-top: calc(var(--face-size) / -2); }
+.layout-nds .face-b { bottom: 0; left: 50%; margin-left: calc(var(--face-size) / -2); }
+.layout-nds .face-x { top: 0; left: 50%; margin-left: calc(var(--face-size) / -2); }
+.layout-nds .face-y { left: 0; top: 50%; margin-top: calc(var(--face-size) / -2); }
 
-.face-b {
-  background: rgba(100, 150, 200, 0.6);
-}
+/* GBA pair (the container's -20deg rotation supplies the diagonal) */
+.layout-gba .face-a { right: calc(4px * var(--btn-scale)); top: 50%; margin-top: calc(var(--face-size) / -2); }
+.layout-gba .face-b { left: calc(4px * var(--btn-scale)); top: 50%; margin-top: calc(var(--face-size) / -2); }
 
-.face-b:active,
-.face-b.pressed {
-  background: rgba(120, 170, 220, 0.8);
-}
+.face-a { color: #fecdd3; border-color: rgba(225, 29, 72, 0.5);
+  background: linear-gradient(to bottom, rgba(159, 18, 57, 0.95), rgba(136, 19, 55, 0.95)); }
+.face-a.pressed { background: #f43f5e; box-shadow: 0 0 14px rgba(244, 63, 94, 0.45); }
 
-.face-x {
-  background: rgba(150, 100, 200, 0.6);
-}
+.face-b { color: #fde68a; border-color: rgba(217, 119, 6, 0.5); }
+.face-b.pressed { background: #f59e0b; box-shadow: 0 0 14px rgba(245, 158, 11, 0.45); }
 
-.face-x:active,
-.face-x.pressed {
-  background: rgba(170, 120, 220, 0.8);
-}
+.face-x { color: #bae6fd; border-color: rgba(2, 132, 199, 0.5); }
+.face-x.pressed { background: #0ea5e9; box-shadow: 0 0 14px rgba(14, 165, 233, 0.45); }
 
-.face-y {
-  background: rgba(200, 150, 100, 0.6);
-}
+.face-y { color: #a7f3d0; border-color: rgba(5, 150, 105, 0.5); }
+.face-y.pressed { background: #10b981; box-shadow: 0 0 14px rgba(16, 185, 129, 0.45); }
 
-.face-y:active,
-.face-y.pressed {
-  background: rgba(220, 170, 120, 0.8);
-}
+/* ------------------------------------------------------------- SHOULDERS -- */
 
 .shoulder-buttons {
   position: absolute;
@@ -197,18 +320,20 @@
   width: 100%;
   display: flex;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 calc(10px * var(--btn-scale));
   box-sizing: border-box;
   opacity: 1;
   transition: opacity 0.15s ease;
 }
 
 .shoulder-button {
-  width: 60px;
-  height: 36px;
-  background: rgba(100, 100, 100, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
+  width: var(--shoulder-w);
+  height: var(--shoulder-h);
+  /* Rounded on top, squarer underneath -- the actual shoulder-button profile. */
+  border-radius: calc(18px * var(--btn-scale)) calc(18px * var(--btn-scale)) calc(7px * var(--btn-scale)) calc(7px * var(--btn-scale));
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  color: #cbd5e1;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -216,41 +341,43 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  font-size: 12px;
+  font-size: calc(13px * var(--btn-scale));
+  font-weight: 900;
+  letter-spacing: 0.1em;
   flex-shrink: 0;
+  transition: transform 75ms ease, background-color 75ms ease, box-shadow 75ms ease;
 }
 
-.shoulder-button:active,
 .shoulder-button.pressed {
-  background: rgba(150, 150, 150, 0.8);
-  border-color: rgba(255, 255, 255, 0.6);
+  background: #6366f1;
+  color: #fff;
+  transform: scale(0.95);
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.4);
 }
 
-.shoulder-l::after {
-  content: 'L';
-}
+.shoulder-l::after { content: 'L'; }
+.shoulder-r::after { content: 'R'; }
 
-.shoulder-r::after {
-  content: 'R';
-}
+/* ------------------------------------------------------ SELECT / START -- */
 
 .center-buttons {
   position: absolute;
-  bottom: max(50px, calc(20px + env(safe-area-inset-bottom)));
+  bottom: max(calc(46px * var(--btn-scale)), calc(18px + env(safe-area-inset-bottom)));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 20px;
+  gap: calc(14px * var(--btn-scale));
   opacity: 1;
   transition: opacity 0.15s ease;
 }
 
 .center-button {
-  width: 50px;
-  height: 28px;
-  background: rgba(100, 100, 100, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
+  width: var(--pill-w);
+  height: var(--pill-h);
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(71, 85, 105, 0.45);
+  color: #94a3b8;
+  border-radius: 999px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -258,28 +385,26 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
-  font-size: 11px;
+  font-size: calc(9px * var(--btn-scale));
+  font-weight: 900;
+  letter-spacing: 0.15em;
   white-space: nowrap;
+  transition: transform 75ms ease, background-color 75ms ease;
 }
 
-.center-button:active,
 .center-button.pressed {
-  background: rgba(150, 150, 150, 0.8);
-  border-color: rgba(255, 255, 255, 0.6);
+  background: #475569;
+  color: #fff;
+  transform: scale(0.95);
 }
 
-.select::after {
-  content: 'Select';
-}
-
-.start::after {
-  content: 'Start';
-}
+.select::after { content: 'SEL'; }
+.start::after { content: 'START'; }
 
 /*
  * Only the real button hit-targets ever accept pointer input, and only
  * while the controls are switched on. Everything else in this overlay
- * (the dpad's diamond of empty space, the gaps around face buttons, etc.)
+ * (the dpad's diagonal corners, the gaps around face buttons, etc.)
  * stays pointer-events: none so taps fall through to the game screen
  * underneath -- critical for DS titles that use stylus/touch input on the
  * bottom screen.
@@ -292,94 +417,49 @@
   touch-action: none;
 }
 
-@media (max-width: 600px) {
-  .controls-container {
-    gap: 15px;
-    padding: 0 15px;
-  }
+/*
+ * Eco mode. Strips every animation, blur and shadow in the control overlay.
+ * Cheap on a low-end phone, and the press states stay legible because they
+ * are colour changes, not motion.
+ */
+.eco-mode .touch-controls *,
+.eco-mode .touch-controls *::before,
+.eco-mode .touch-controls *::after {
+  transition: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
 
-  .dpad-area {
-    width: 100px;
-    height: 100px;
-  }
+.eco-mode .face-button.pressed,
+.eco-mode .shoulder-button.pressed,
+.eco-mode .center-button.pressed {
+  transform: none;
+}
 
-  .dpad-button {
-    width: 32px;
-    height: 32px;
-  }
-
-  .dpad-up,
-  .dpad-down {
-    top: auto;
-  }
-
-  .face-buttons-area {
-    gap: 8px;
-  }
-
-  .face-button {
-    width: 40px;
-    height: 40px;
-    font-size: 12px;
-  }
-
-  .shoulder-buttons {
-    padding: 0 15px;
-  }
-
-  .shoulder-button {
-    width: 50px;
-    height: 32px;
-    font-size: 10px;
-  }
-
-  .center-button {
-    width: 45px;
-    height: 25px;
-    font-size: 9px;
-  }
+.eco-mode .layout-gba .face-button.pressed {
+  transform: rotate(20deg);
 }
 
 @media (orientation: landscape) {
+  /*
+   * In landscape the pad splits to the outer edges and the shoulders move to
+   * the top corners individually, so the game screen keeps the middle.
+   */
   .controls-container {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 30px;
-  }
-
-  .dpad-area {
-    width: 100px;
-    height: 100px;
-  }
-
-  .face-buttons-area {
-    flex-direction: row;
-    gap: 12px;
-  }
-
-  .shoulder-buttons {
-    position: absolute;
-    top: max(10px, env(safe-area-inset-top));
-    height: 100%;
-    flex-direction: column;
-    gap: 10px;
-    justify-content: flex-start;
+    padding: 0 calc(20px * var(--btn-scale));
   }
 
   .shoulder-l {
     position: absolute;
     top: max(10px, env(safe-area-inset-top));
     left: max(10px, env(safe-area-inset-left));
-    width: 50px;
-    height: 32px;
   }
 
   .shoulder-r {
     position: absolute;
     top: max(10px, env(safe-area-inset-top));
     right: max(10px, env(safe-area-inset-right));
-    width: 50px;
-    height: 32px;
   }
 }
