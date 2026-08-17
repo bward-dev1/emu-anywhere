@@ -19,3 +19,7 @@ binaries/
 # ...but the BSD clean-room FreeBIOS IS legally redistributable. Keep it.
 !wasmelonDS/freebios/drastic_bios_arm7.bin
 !wasmelonDS/freebios/drastic_bios_arm9.bin
+
+# ...and the MIT Cult-of-GBA replacement GBA BIOS is likewise a from-scratch
+# reimplementation, not a Nintendo dump. Legally redistributable. Keep it.
+!frontend/public/static/gba/freebios/gba_freebios.bin

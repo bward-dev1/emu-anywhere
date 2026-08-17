@@ -154,14 +154,21 @@
     Y: [2]
   };
 
-  const DefaultSubscribers = {
+  // A factory rather than a shared object literal: WebMelon._internal.subscribers is
+  // reassigned to a fresh call to this on every shutdown (see events.onShutdown below) so
+  // that a new play session starts with empty subscriber lists. If this were a single
+  // shared object (as it previously was), every onPrepare/addShutdownListener/etc. call
+  // across the page's lifetime would keep pushing onto the *same* arrays forever, since
+  // "reset" was just reassigning the same reference to itself -- old, already-unmounted
+  // callers from a prior ROM would still be invoked (and re-accumulate) on every later boot.
+  const makeDefaultSubscribers = () => ({
     wasmLoad: [],
     emuFrameUpdate: [],
     emuShutdown: [],
     saveComplete: [],
     saveInitiate: [],
     vfsInitialized: []
-  };
+  });
 
   let WebMelon = {
     // Things in here should only be used by the SDK itself. This does not need to (and should not be)
@@ -215,7 +222,7 @@
         onShutdown: () => {
           const shutdownListeners = WebMelon._internal.subscribers.emuShutdown;
           // Reset all listeners to avoid running callbacks that shouldn't be called anymore
-          WebMelon._internal.subscribers = DefaultSubscribers;
+          WebMelon._internal.subscribers = makeDefaultSubscribers();
           // Call old shutdown listeners
           callAllSubscribers(shutdownListeners);
           // Stop emulator interval and reset state
@@ -261,7 +268,7 @@
         gamepadBinds: DefaultGamepadBindings,
         gamepadRumbleIntensity: 0.5
       },
-      subscribers: DefaultSubscribers,
+      subscribers: makeDefaultSubscribers(),
       storage: {
         initialized: false,
         isSaving: false
@@ -848,9 +855,22 @@
   }
 })();
 
-window.Module = {
-  onRuntimeInitialized: () => {
-    window.WebMelon._internal.wasmLoaded = true;
-    window.WebMelon._internal.events.onWasmLoad();
+// Emscripten's documented convention is that a page pre-configures `Module` (e.g. with
+// onRuntimeInitialized) *before* the generated glue script (wasmemulator.js) runs, because
+// that script does `var Module = typeof Module != 'undefined' ? Module : {}` and then keeps
+// populating that same object (HEAPU8, the embind-exported classes, etc.) as WASM
+// instantiation completes asynchronously. We can't guarantee which of wasmemulator.js /
+// webmelon.js the page loads first (that ordering lives in index.html, outside this SDK), so
+// rather than clobbering `window.Module` wholesale -- which would either discard whatever the
+// glue script already attached to it, or get silently discarded itself if the glue script's
+// own `Module` reference doesn't observe a later reassignment -- merge our callback into
+// whatever Module object already exists, and chain any onRuntimeInitialized it already had.
+window.Module = window.Module || {};
+const previousOnRuntimeInitialized = window.Module.onRuntimeInitialized;
+window.Module.onRuntimeInitialized = () => {
+  if (previousOnRuntimeInitialized) {
+    previousOnRuntimeInitialized();
   }
+  window.WebMelon._internal.wasmLoaded = true;
+  window.WebMelon._internal.events.onWasmLoad();
 };

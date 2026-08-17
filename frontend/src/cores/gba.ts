@@ -19,9 +19,33 @@ export class GBACore implements EmuCore {
     // Load all GBA scripts
     await this.loadGBAScripts();
 
-    // Create the emulator with SKIPBoot enabled (HLE, no BIOS required)
+    // Create the emulator and give it a BIOS.
+    // IodineGBA does NOT support HLE: Memory.js loadBIOS() returns allowInit 0 unless
+    // it receives exactly 0x4000 bytes ("Kill init, rather than allow HLE for now").
+    // Setting SKIPBoot alone leaves the core refusing to initialize, which is why a
+    // ROM could be loaded and nothing would ever render. We attach the free,
+    // MIT-licensed Cult-of-GBA replacement BIOS (from-scratch ARM assembly, not a
+    // Nintendo dump). See static/gba/freebios/LICENSE.txt and NOTICE.md.
     this.emulator = this.createEmulator();
+    this.emulator.attachBIOS(await this.loadFreeBIOS());
     this.emulator.settings.SKIPBoot = true;
+
+    // We render on the main thread via GfxGlueCode (attachGraphicsFrameHandler below),
+    // not through IodineGBA's offthread Worker renderer, so make sure the core never
+    // tries to spin one up. (It would fall back to the main-thread renderer anyway,
+    // since GitHub Pages can't send the COOP/COEP headers SharedArrayBuffer requires,
+    // but disable it explicitly rather than rely on that fallback.)
+    this.emulator.settings.offthreadGfxEnabled = false;
+
+    // Emulator.prototype.play()/pause() call this.playStatusCallback(...) UNCONDITIONALLY
+    // (Emulator.js:67 and :75) -- there is no null check. Without a handler attached, the
+    // very first core.resume() throws "this.playStatusCallback is not a function" and the
+    // core silently dies right where the Start button expects the game to appear. Track
+    // our own isPlaying flag from the reported status rather than assuming resume()/pause()
+    // are the only callers that can change it.
+    this.emulator.attachPlayStatusHandler((status: number) => {
+      this.isPlaying = !!status;
+    });
 
     // Create graphics handler
     this.createCanvas();
@@ -39,7 +63,7 @@ export class GBACore implements EmuCore {
     // Attach ROM
     this.emulator.attachROM(rom);
 
-    // Enable HLE boot (no BIOS)
+    // Skip the BIOS boot animation and jump straight to the cartridge entry point.
     this.emulator.settings.SKIPBoot = true;
 
     // Start the timer
@@ -112,10 +136,13 @@ export class GBACore implements EmuCore {
       '/static/gba/iodineGBA/core/graphics/Mosaic.js',
       '/static/gba/iodineGBA/core/graphics/ColorEffects.js',
       '/static/gba/iodineGBA/core/graphics/Compositor.js',
-      '/static/gba/iodineGBA/core/graphics/Worker.js',
       '/static/gba/iodineGBA/core/RunLoop.js',
       '/static/gba/iodineGBA/core/Saves.js',
-      '/static/gba/iodineGBA/core/Worker.js',
+      // NOTE: core/Worker.js and core/graphics/Worker.js are intentionally NOT loaded here.
+      // Both start with a top-level `importScripts(...)` call, which only exists inside a
+      // real Web Worker global scope. Loaded as a plain <script> on the main thread it throws
+      // "importScripts is not defined" the instant it runs. They're only meant to be spawned
+      // via `new Worker(...)` by RendererShim.js's offthread path, which we disable above.
       '/static/gba/ROMLoadGlueCode.js',
       '/static/gba/GfxGlueCode.js',
       '/static/gba/XAudioJS/XAudioServer.js',
@@ -130,10 +157,26 @@ export class GBACore implements EmuCore {
     }
   }
 
+  private async loadFreeBIOS(): Promise<Uint8Array> {
+    const url = new URL('static/gba/freebios/gba_freebios.bin', document.baseURI).href;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Failed to load GBA BIOS (${res.status}) from ${url}`);
+    }
+    const bios = new Uint8Array(await res.arrayBuffer());
+    if (bios.length !== 0x4000) {
+      throw new Error(`GBA BIOS must be exactly 16384 bytes, got ${bios.length}`);
+    }
+    return bios;
+  }
+
   private loadScript(src: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = src;
+      // Resolve against the document base. Vite is configured with base './' so the
+      // app can be hosted under a sub-path (GitHub Pages project sites); a leading
+      // '/' would resolve to the domain root there and 404 every core script.
+      script.src = new URL(src.replace(/^\//, ''), document.baseURI).href;
       script.async = false;
       script.onload = () => resolve();
       script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
@@ -152,12 +195,15 @@ export class GBACore implements EmuCore {
   }
 
   private createAudioContext(): any {
-    // Return a dummy audio element since GlueCodeMixer expects it
-    const audioElement = document.createElement('audio');
-    audioElement.id = 'gba-audio';
-    audioElement.style.display = 'none';
-    document.body.appendChild(audioElement);
-    return audioElement;
+    // GlueCodeMixer forwards this straight through to XAudioServer as `userEventLatch`
+    // (see XAudioJS/XAudioServer.js). XAudioServer never calls play()/pause() on it or
+    // otherwise treats it as an <audio> element -- it only attaches 'click'/'touchstart'/
+    // 'touchend' listeners to it to lazily create the real Web Audio AudioContext on a user
+    // gesture (working around autoplay-policy restrictions). A detached, display:none
+    // <audio> element never receives such a gesture, so audio would never initialize and the
+    // game would run permanently silent. document.body does receive the bubbled click/touch
+    // from whatever button the user presses to start playing, so audio actually unlocks.
+    return document.body;
   }
 
   private startTimer(): void {

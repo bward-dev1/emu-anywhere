@@ -149,11 +149,11 @@ export default function Entrypoint({ onStartEmulating, onOpenSettings }: Entrypo
             <p>
               Selected: {romFileName}
               {detectedSystem ? (
-                <span style={{ marginLeft: '8px', color: '#666' }}>
+                <span className="ml-2 opacity-60">
                   ({detectedSystem.toUpperCase()})
                 </span>
               ) : (
-                <span style={{ marginLeft: '8px', color: '#d32f2f' }}>
+                <span className="ml-2 text-error">
                   (unsupported format)
                 </span>
               )}
@@ -172,7 +172,7 @@ export default function Entrypoint({ onStartEmulating, onOpenSettings }: Entrypo
       ) : null}
       <div class="footer-disclaimer">
         <span class="disclaimer-text">
-          <a class="link link-primary" onClick={onOpenSettings}>Settings</a> • <a href="https://github.com/brxxn/ds-anywhere" class="link link-primary">GitHub</a>
+          <a class="link link-primary" onClick={onOpenSettings}>Settings</a> • <a href="https://github.com/bward-dev1/emu-anywhere" class="link link-primary">GitHub</a>
         </span>
         <br />
         <span class="disclaimer-text">

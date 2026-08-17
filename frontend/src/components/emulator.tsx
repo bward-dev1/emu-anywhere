@@ -57,6 +57,15 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
   };
 
   useEffect(() => {
+    // Lock page scroll/pull-to-refresh for as long as the emulator view is
+    // mounted (Main only renders <Emulator> while actively playing).
+    document.body.classList.add('emulator-active');
+    return () => {
+      document.body.classList.remove('emulator-active');
+    };
+  }, []);
+
+  useEffect(() => {
     if (!started) {
       setStarted(true);
 
@@ -81,6 +90,10 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
       } else if (system === 'gba') {
         // GBA boot
         const canvas = (core as any).getCanvas();
+        // The core hands us a bare canvas with no class -- tag it so it
+        // picks up the same responsive sizing/safe-area rules as the NDS
+        // screens instead of falling back to its own inline width/height.
+        canvas.classList.add('emulator-screen', 'gba-screen');
         const container = document.querySelector('.emulator-container');
         if (container) {
           container.innerHTML = '';

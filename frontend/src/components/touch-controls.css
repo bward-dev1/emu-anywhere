@@ -4,21 +4,21 @@
   left: 0;
   right: 0;
   top: 0;
+  /*
+   * The overlay itself never intercepts anything. Only the actual button
+   * elements opt back in (below, gated on .visible). This is what lets
+   * taps land on whatever's underneath -- most importantly the NDS
+   * bottom-screen canvas, which needs its own stylus/touch input and
+   * would otherwise be completely unusable whenever these controls are on.
+   */
   pointer-events: none;
   touch-action: none;
   font-size: 16px;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  padding: env(safe-area-inset-bottom) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-}
-
-.touch-controls.visible {
-  pointer-events: auto;
-}
-
-.touch-controls.hidden {
-  pointer-events: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  z-index: 9000;
 }
 
 .controls-container {
@@ -34,6 +34,15 @@
   padding: 0 20px;
   gap: 20px;
   box-sizing: border-box;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
+.touch-controls.hidden .controls-container,
+.touch-controls.hidden .shoulder-buttons,
+.touch-controls.hidden .center-buttons {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .toggle-controls-btn {
@@ -53,6 +62,7 @@
   justify-content: center;
   z-index: 10000;
   pointer-events: auto;
+  touch-action: manipulation;
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
@@ -84,7 +94,8 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.dpad-button:active {
+.dpad-button:active,
+.dpad-button.pressed {
   background: rgba(150, 150, 150, 0.8);
   border-color: rgba(255, 255, 255, 0.6);
 }
@@ -137,7 +148,8 @@
   font-size: 14px;
 }
 
-.face-button:active {
+.face-button:active,
+.face-button.pressed {
   border-color: rgba(255, 255, 255, 0.6);
 }
 
@@ -145,7 +157,8 @@
   background: rgba(200, 100, 100, 0.6);
 }
 
-.face-a:active {
+.face-a:active,
+.face-a.pressed {
   background: rgba(220, 120, 120, 0.8);
 }
 
@@ -153,7 +166,8 @@
   background: rgba(100, 150, 200, 0.6);
 }
 
-.face-b:active {
+.face-b:active,
+.face-b.pressed {
   background: rgba(120, 170, 220, 0.8);
 }
 
@@ -161,7 +175,8 @@
   background: rgba(150, 100, 200, 0.6);
 }
 
-.face-x:active {
+.face-x:active,
+.face-x.pressed {
   background: rgba(170, 120, 220, 0.8);
 }
 
@@ -169,7 +184,8 @@
   background: rgba(200, 150, 100, 0.6);
 }
 
-.face-y:active {
+.face-y:active,
+.face-y.pressed {
   background: rgba(220, 170, 120, 0.8);
 }
 
@@ -183,7 +199,8 @@
   justify-content: space-between;
   padding: 0 20px;
   box-sizing: border-box;
-  pointer-events: auto;
+  opacity: 1;
+  transition: opacity 0.15s ease;
 }
 
 .shoulder-button {
@@ -203,7 +220,8 @@
   flex-shrink: 0;
 }
 
-.shoulder-button:active {
+.shoulder-button:active,
+.shoulder-button.pressed {
   background: rgba(150, 150, 150, 0.8);
   border-color: rgba(255, 255, 255, 0.6);
 }
@@ -223,7 +241,8 @@
   transform: translateX(-50%);
   display: flex;
   gap: 20px;
-  pointer-events: auto;
+  opacity: 1;
+  transition: opacity 0.15s ease;
 }
 
 .center-button {
@@ -243,7 +262,8 @@
   white-space: nowrap;
 }
 
-.center-button:active {
+.center-button:active,
+.center-button.pressed {
   background: rgba(150, 150, 150, 0.8);
   border-color: rgba(255, 255, 255, 0.6);
 }
@@ -254,6 +274,22 @@
 
 .start::after {
   content: 'Start';
+}
+
+/*
+ * Only the real button hit-targets ever accept pointer input, and only
+ * while the controls are switched on. Everything else in this overlay
+ * (the dpad's diamond of empty space, the gaps around face buttons, etc.)
+ * stays pointer-events: none so taps fall through to the game screen
+ * underneath -- critical for DS titles that use stylus/touch input on the
+ * bottom screen.
+ */
+.touch-controls.visible .dpad-button,
+.touch-controls.visible .face-button,
+.touch-controls.visible .shoulder-button,
+.touch-controls.visible .center-button {
+  pointer-events: auto;
+  touch-action: none;
 }
 
 @media (max-width: 600px) {

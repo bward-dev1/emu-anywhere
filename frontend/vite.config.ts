@@ -16,7 +16,10 @@ export default defineConfig({
         theme_color: '#65c3c8',
         background_color: '#faf7f5',
         display: 'standalone',
-        orientation: 'landscape',
+        // No orientation lock: the DS's native layout is two vertically
+        // stacked screens (portrait-shaped), while GBA and side-by-side DS
+        // layouts favor landscape. The UI now supports and adapts to both,
+        // so let the OS/user pick rather than force one on an installed PWA.
         start_url: './',
         scope: './',
         icons: [

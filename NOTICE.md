@@ -15,6 +15,7 @@ because it incorporates melonDS, which is GPLv3. See `LICENSE`.
 | `gba-core/XAudioJS/` | taisel/XAudioJS | MIT | Audio output shim for the GBA core |
 | `gba-core/*GlueCode.js` | ayvacs/gba.js.org | MIT | Glue layer, **heavily modified** — see "Legal remediation" |
 | `wasmelonDS/freebios/` | DraStic FreeBIOS, © 2013 Gilead Kutnick | BSD-3-Clause | Clean-room DS BIOS replacement, **not** derived from Nintendo's BIOS |
+| `frontend/public/static/gba/freebios/` | Cult-of-GBA BIOS, © 2020–2021 DenSinH and fleroviux | MIT | Clean-room GBA BIOS replacement, written from scratch in ARM assembly, **not** derived from Nintendo's BIOS. sha1 `2e41f9d30ecdf1c4540edf89ac16f49bf327edb7` |
 
 MIT and BSD-3-Clause are both GPLv3-compatible, so the combined distribution
 under GPLv3 is valid. Each component retains its own copyright notice.
@@ -44,9 +45,17 @@ no upstream history was carried over.
 
 1. **No ROMs ship.** The user supplies their own game files at runtime via a file
    picker or drag-and-drop. Files are read in-browser and never uploaded.
-2. **No Nintendo BIOS ships.** The GBA core boots via high-level emulation
-   (`SKIPBoot`), and the DS core uses the BSD-licensed clean-room FreeBIOS. A
-   user may optionally supply their own legally-dumped BIOS.
+2. **No Nintendo BIOS ships.** Both cores boot on clean-room BIOS replacements:
+   the DS core uses the BSD-licensed DraStic FreeBIOS, and the GBA core uses the
+   MIT-licensed Cult-of-GBA FreeBIOS. A user may optionally supply their own
+   legally-dumped BIOS instead.
+
+   Note on the GBA core specifically: IodineGBA does **not** support high-level
+   emulation. Its `Memory.js loadBIOS()` refuses to initialise unless handed
+   exactly 0x4000 bytes, so setting `SKIPBoot` alone leaves the core silently
+   dead — a real BIOS image is mandatory, and the only question is whose. An
+   earlier revision of this file claimed the GBA core booted via HLE; that was
+   incorrect, and it is why GBA ROMs appeared to load and then never ran.
 3. **Emulators are legal.** *Sony Computer Entertainment v. Connectix* (9th Cir.
    2000) and *Sega v. Accolade* (9th Cir. 1992) establish that writing an
    emulator is lawful. What is unlawful is distributing copyrighted ROMs and

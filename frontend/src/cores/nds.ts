@@ -6,19 +6,47 @@ export class NDSCore implements EmuCore {
       throw new Error('WebMelon not loaded');
     }
 
-    window.WebMelon.cart.createCart();
-    window.WebMelon.storage.createDirectory('/roms');
-    window.WebMelon.storage.write('/roms/game.nds', rom);
-    window.WebMelon.emulator.createEmulator();
+    const WebMelon = window.WebMelon;
 
-    if (!window.WebMelon.cart.loadFileIntoCart('/roms/game.nds')) {
+    WebMelon.cart.createCart();
+    WebMelon.storage.createDirectory('/roms');
+    WebMelon.storage.write('/roms/game.nds', rom);
+    WebMelon.emulator.createEmulator();
+
+    if (!WebMelon.cart.loadFileIntoCart('/roms/game.nds')) {
       throw new Error('Failed to load cart');
     }
 
-    const gameCode = window.WebMelon.cart.getUnloadedCartCode();
-    window.WebMelon.emulator.setSavePath('/savefiles/' + gameCode + '.sav');
-    window.WebMelon.emulator.loadFreeBIOS();
-    window.WebMelon.emulator.loadCart();
+    // The save file for this cart (if one exists from a previous session) lives under
+    // /savefiles, which is an IndexedDB-backed mount. It is only guaranteed to contain
+    // previously persisted saves once its async FS.syncfs() completes, so wait for that
+    // directly here rather than going through WebMelon.storage.onPrepare(). The caller
+    // (Entrypoint's "Play" handler) also subscribes via onPrepare for its own "reveal the
+    // running emulator" transition -- awaiting the lower-level callback ourselves keeps our
+    // BIOS/cart/save loading deterministic and finished *before* that transition can fire,
+    // instead of racing whichever onPrepare subscriber happened to register first.
+    await new Promise<void>((resolve, reject) => {
+      WebMelon.storage.initializeSavefilesDirectory((err: unknown) => {
+        if (err) {
+          reject(new Error(`Failed to initialize DS save directory: ${err}`));
+          return;
+        }
+        resolve();
+      });
+    });
+
+    const gameCode = WebMelon.cart.getUnloadedCartCode();
+    WebMelon.emulator.setSavePath('/savefiles/' + gameCode + '.sav');
+    WebMelon.emulator.loadFreeBIOS();
+    WebMelon.emulator.loadCart();
+
+    // Now that the cart, BIOS, and any existing save are loaded, prepare the shared virtual
+    // filesystem (this also covers /firmware) and fire the "vfs ready" event. Without this
+    // call nothing in this boot path ever invokes prepareVirtualFilesystem(), so the
+    // onPrepare callback the caller registered before awaiting boot() would never run and
+    // the UI would be stuck on its loading state forever -- this was the main reason loading
+    // a ROM and pressing Play did not work at all.
+    WebMelon.storage.prepareVirtualFilesystem();
   }
 
   pause(): void {
