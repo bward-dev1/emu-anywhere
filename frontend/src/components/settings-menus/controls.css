@@ -1,0 +1,51 @@
+.controls-container {
+  padding: 5px;
+}
+
+.controls-input-mode-selector {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.controls-control {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.controls-ctrl-name {
+  flex-grow: 1;
+  align-items: center;
+}
+
+.controls-ctrl-name-text {
+  font-size: 14px;
+}
+
+.controls-ctrl-primary, .controls-ctrl-alternate {
+  flex-basis: 125px;
+  cursor: pointer;
+  border: 1px dashed;
+  border-radius: 8px;
+  border-color: lightgray;
+  display: flex;
+  flex-direction: column;
+  margin: 5px;
+  justify-content: center;
+  text-align: center;
+  height: 35px;
+}
+
+.controls-ctrl-active {
+  border-color: red;
+}
+
+.unbound-text {
+  font-size: 12px;
+  color: lightgray;
+}
+
+.unbound-text-active {
+  font-size: 12px;
+  color: red;
+}

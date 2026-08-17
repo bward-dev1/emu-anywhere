@@ -1,0 +1,72 @@
+# This action runs for every push and pull request to build the WASM emulator files and
+# then build the frontend as well.
+name: Build artifacts
+on: [push, pull_request]
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+      - name: Perform action runner setup
+        run: |
+          chmod +x ./scripts/action-runner-setup.sh
+          ./scripts/action-runner-setup.sh
+      - name: Look for emsdk caches
+        uses: actions/cache/restore@v4
+        with:
+          key: emsdk-cache
+          path: action-runner/emsdk-cache
+      - name: Load emsdk
+        uses: openinfer/setup-emsdk@add1857f6f5c63be34f63d2db48e2db6c8579e2b
+        with:
+          version: 4.0.0
+          actions-cache-folder: 'action-runner/emsdk-cache'
+      - name: Save emsdk cache
+        uses: actions/cache/save@v4
+        with:
+          key: emsdk-cache
+          path: action-runner/emsdk-cache
+      - name: Build and prepare artifacts
+        run: |
+          python3 ./buildtools.py full-build --github-action-runner
+          python3 ./buildtools.py prepare-artifacts
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend
+          path: ./action-runner/artifacts/frontend/
+      - name: Upload WebMelon SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webmelon-sdk
+          path: ./action-runner/artifacts/webmelon-sdk/
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/release'
+        with:
+          path: ./action-runner/artifacts/frontend/
+  
+  pages-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/release'
+    steps:
+      - name: Deploy frontend artifact to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+# NOTE: upstream ds-anywhere also had a `cf-deploy` job that pushed the same
+# artifact to Cloudflare Pages. This fork deploys to GitHub Pages only and has
+# no Cloudflare project or CLOUDFLARE_TOKEN/CLOUDFLARE_ACCOUNT_ID secrets, so
+# that job was removed rather than left to fail on every release build.

@@ -1,0 +1,21 @@
+.firmware-container {
+  padding: 5px;
+}
+
+#firmware-file-input {
+  display: none;
+}
+
+.firmware-input-container {
+  text-align: center;
+  align-items: center;
+  border: 1px dashed;
+  border-radius: 16px;
+  padding-top: 10vh;
+  padding-bottom: 10vh;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  justify-content: center;
+  border-color: lightgray;
+}

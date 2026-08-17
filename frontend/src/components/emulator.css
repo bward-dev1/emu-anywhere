@@ -1,0 +1,53 @@
+h1 {
+  font-weight: bold;
+  font-size: 2em;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+h3 {
+  font-weight: bold;
+  font-size: 1.5em;
+  text-align: center;
+}
+
+h5 {
+  font-size: 0.8em;
+}
+
+p {
+  text-align: left;
+}
+
+.emulator-header {
+  display: flex;
+  flex-direction: column;
+}
+
+.emulator-controls-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 5px;
+}
+
+.game-title-text-container {
+  margin-bottom: 5px;
+}
+
+.game-title-text {
+  font-size: 12px;
+}
+
+.emulator-container {
+  flex-direction: row;
+  display: block;
+}
+
+.emulator-screen {
+  image-rendering: pixelated;
+  width: 100%;
+  object-fit: contain;
+  margin-bottom: 10px;
+  max-height: 40vh;
+}

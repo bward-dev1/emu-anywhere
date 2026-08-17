@@ -1,0 +1,21 @@
+# Ignore the action-runner/ directory used by the GitHub Actions runner
+# to build and deploy to GitHub Pages
+action-runner/
+.DS_Store
+*.nds
+# LEGAL: never commit ROMs, BIOS dumps, or firmware. See NOTICE.md.
+*.gba
+*.nds
+*.dsi
+*.srl
+*.rom
+*.sav
+*.dsv
+bios*.bin
+*bios.bin
+firmware*.bin
+binaries/
+
+# ...but the BSD clean-room FreeBIOS IS legally redistributable. Keep it.
+!wasmelonDS/freebios/drastic_bios_arm7.bin
+!wasmelonDS/freebios/drastic_bios_arm9.bin

@@ -1,0 +1,349 @@
+.touch-controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  pointer-events: none;
+  touch-action: none;
+  font-size: 16px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  padding: env(safe-area-inset-bottom) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.touch-controls.visible {
+  pointer-events: auto;
+}
+
+.touch-controls.hidden {
+  pointer-events: none;
+}
+
+.controls-container {
+  position: absolute;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 20px;
+  gap: 20px;
+  box-sizing: border-box;
+}
+
+.toggle-controls-btn {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  pointer-events: auto;
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.toggle-controls-btn:active {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.dpad-area {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.dpad-button {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: rgba(100, 100, 100, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dpad-button:active {
+  background: rgba(150, 150, 150, 0.8);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.dpad-up {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.dpad-down {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.dpad-left {
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.dpad-right {
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.face-buttons-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.face-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.face-button:active {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.face-a {
+  background: rgba(200, 100, 100, 0.6);
+}
+
+.face-a:active {
+  background: rgba(220, 120, 120, 0.8);
+}
+
+.face-b {
+  background: rgba(100, 150, 200, 0.6);
+}
+
+.face-b:active {
+  background: rgba(120, 170, 220, 0.8);
+}
+
+.face-x {
+  background: rgba(150, 100, 200, 0.6);
+}
+
+.face-x:active {
+  background: rgba(170, 120, 220, 0.8);
+}
+
+.face-y {
+  background: rgba(200, 150, 100, 0.6);
+}
+
+.face-y:active {
+  background: rgba(220, 170, 120, 0.8);
+}
+
+.shoulder-buttons {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.shoulder-button {
+  width: 60px;
+  height: 36px;
+  background: rgba(100, 100, 100, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.shoulder-button:active {
+  background: rgba(150, 150, 150, 0.8);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.shoulder-l::after {
+  content: 'L';
+}
+
+.shoulder-r::after {
+  content: 'R';
+}
+
+.center-buttons {
+  position: absolute;
+  bottom: max(50px, calc(20px + env(safe-area-inset-bottom)));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  pointer-events: auto;
+}
+
+.center-button {
+  width: 50px;
+  height: 28px;
+  background: rgba(100, 100, 100, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.center-button:active {
+  background: rgba(150, 150, 150, 0.8);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.select::after {
+  content: 'Select';
+}
+
+.start::after {
+  content: 'Start';
+}
+
+@media (max-width: 600px) {
+  .controls-container {
+    gap: 15px;
+    padding: 0 15px;
+  }
+
+  .dpad-area {
+    width: 100px;
+    height: 100px;
+  }
+
+  .dpad-button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .dpad-up,
+  .dpad-down {
+    top: auto;
+  }
+
+  .face-buttons-area {
+    gap: 8px;
+  }
+
+  .face-button {
+    width: 40px;
+    height: 40px;
+    font-size: 12px;
+  }
+
+  .shoulder-buttons {
+    padding: 0 15px;
+  }
+
+  .shoulder-button {
+    width: 50px;
+    height: 32px;
+    font-size: 10px;
+  }
+
+  .center-button {
+    width: 45px;
+    height: 25px;
+    font-size: 9px;
+  }
+}
+
+@media (orientation: landscape) {
+  .controls-container {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 30px;
+  }
+
+  .dpad-area {
+    width: 100px;
+    height: 100px;
+  }
+
+  .face-buttons-area {
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  .shoulder-buttons {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    height: 100%;
+    flex-direction: column;
+    gap: 10px;
+    justify-content: flex-start;
+  }
+
+  .shoulder-l {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
+    width: 50px;
+    height: 32px;
+  }
+
+  .shoulder-r {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    width: 50px;
+    height: 32px;
+  }
+}

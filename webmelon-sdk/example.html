@@ -1,0 +1,39 @@
+<html>
+  <body>
+    <canvas height="192" width="256" id="top-screen" style="left: 713.667px; top: 0px; width: 882.667px; height: 662px; image-rendering: pixelated;"></canvas>
+    <canvas height="192" width="256" id="bottom-screen" style="left: 713.667px; top: 0px; width: 882.667px; height: 662px; image-rendering: pixelated;"></canvas>
+    <pre id="debug-stats">Loading...</pre>
+    <script src="wasmemulator.js"></script>
+    <script src="webmelon.js"></script>
+    <script>
+      (() => {
+        const updateDebugText = (text) => {
+          document.getElementById('debug-stats').innerText = text;
+        }
+
+        const loadRomToStorage = async () => {
+          const romData = new Uint8Array(await (await fetch('/static/game.nds')).arrayBuffer());
+          WebMelon.storage.createDirectory('/roms');
+          WebMelon.storage.createDirectory('/savefiles');
+          WebMelon.storage.mountIndexedDB('/savefiles');
+          WebMelon.storage.write('/roms/game.nds', romData);
+        };
+        
+        WebMelon.assembly.addLoadListener(async () => {
+          updateDebugText('wasm loaded, downloading ROM from static path...');
+          await loadRomToStorage();
+          updateDebugText('downloaded wasm, creating emulator...');
+          setTimeout(() => {
+            WebMelon.emulator.createEmulator();
+            WebMelon.emulator.loadFreeBIOS();
+            WebMelon.emulator.loadRom('/roms/game.nds');
+            WebMelon.emulator.startEmulation('top-screen', 'bottom-screen');
+            updateDebugText('Emulation started!');
+          }, 500);
+          // TODO: run this on save
+          setInterval(WebMelon.storage.sync, 20000);
+        });
+      })();
+    </script>
+  </body>
+</html>

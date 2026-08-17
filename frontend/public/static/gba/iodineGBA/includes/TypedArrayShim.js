@@ -1,0 +1,177 @@
+"use strict";
+function getInt8Array(size_t) {
+    try {
+        return new Int8Array(size_t);
+    }
+    catch (error) {
+        return getArray(size_t);
+    }
+}
+function getUint8Array(size_t) {
+    try {
+        return new Uint8Array(size_t);
+    }
+    catch (error) {
+        return getArray(size_t);
+    }
+}
+function getUint8View(typed_array) {
+    try {
+        return new Uint8Array(typed_array.buffer);
+    }
+    catch (error) {
+        return null;
+    }
+}
+function getSharedUint8Array(size_t) {
+    try {
+        //Compatibility for older Firefox Nightlies:
+        return new SharedUint8Array(size_t);
+    }
+    catch (error) {
+        return new Uint8Array(new SharedArrayBuffer(size_t));
+    }
+}
+function getInt16Array(size_t) {
+    try {
+        return new Int16Array(size_t);
+    }
+    catch (error) {
+        return getArray(size_t);
+    }
+}
+function getUint16Array(size_t) {
+    try {
+        return new Uint16Array(size_t);
+    }
+    catch (error) {
+        return getArray(size_t);
+    }
+}
+function getUint16View(typed_array) {
+    try {
+        return new Uint16Array(typed_array.buffer);
+    }
+    catch (error) {
+        return null;
+    }
+}
+function getInt32Array(size_t) {
+    try {
+        return new Int32Array(size_t);
+    }
+    catch (error) {
+        return getArray(size_t);
+    }
+}
+function getInt32View(typed_array) {
+    try {
+        return new Int32Array(typed_array.buffer);
+    }
+    catch (error) {
+        return null;
+    }
+}
+function getInt32ViewCustom(typed_array, start, end) {
+    try {
+        typed_array = getInt32View(typed_array);
+        return typed_array.subarray(start, end);
+    }
+    catch (error) {
+        try {
+            //Nightly Firefox 4 used to have the subarray function named as slice:
+            return typed_array.slice(start, end);
+        }
+        catch (error) {
+            return null;
+        }
+    }
+}
+function getSharedInt32Array(size_t) {
+    try {
+        //Compatibility for older Firefox Nightlies:
+        return new SharedInt32Array(size_t);
+    }
+    catch (error) {
+        return new Int32Array(new SharedArrayBuffer(size_t << 2));
+    }
+}
+function getUint8ViewCustom(typed_array, start, end) {
+    try {
+        typed_array = getUint8View(typed_array);
+        return typed_array.subarray(start, end);
+    }
+    catch (error) {
+        try {
+            //Nightly Firefox 4 used to have the subarray function named as slice:
+            return typed_array.slice(start, end);
+        }
+        catch (error) {
+            return null;
+        }
+    }
+}
+function getUint32Array(size_t) {
+    try {
+        return new Uint32Array(size_t);
+    }
+    catch (error) {
+        return getArray(size_t);
+    }
+}
+function getSharedUint32Array(size_t) {
+    try {
+        //Compatibility for older Firefox Nightlies:
+        return new SharedUint32Array(size_t);
+    }
+    catch (error) {
+        return new Uint32Array(new SharedArrayBuffer(size_t << 2));
+    }
+}
+function getFloat32Array(size_t) {
+    try {
+        return new Float32Array(size_t);
+    }
+    catch (error) {
+        return getArray(size_t);
+    }
+}
+function getSharedFloat32Array(size_t) {
+    try {
+        //Compatibility for older Firefox Nightlies:
+        return new SharedFloat32Array(size_t);
+    }
+    catch (error) {
+        return new Float32Array(new SharedArrayBuffer(size_t << 2));
+    }
+}
+function getArray(size_t) {
+    var genericArray = [];
+    for (var size_index = 0; size_index < size_t; ++size_index) {
+        genericArray[size_index] = 0;
+    }
+    return genericArray;
+}
+var __VIEWS_SUPPORTED__ = getUint16View(getInt32Array(1)) !== null;
+var __LITTLE_ENDIAN__ = (function () {
+    if (__VIEWS_SUPPORTED__) {
+        var test = getInt32Array(1);
+        test[0] = 1;
+        var test2 = getUint16View(test);
+        if (test2[0] == 1) {
+            return true;
+        }
+    }
+    return false;
+})();
+if (typeof Atomics == "object") {
+    if (typeof Atomics.futexWait == "function" && typeof Atomics.wait == "undefined") {
+        //Polyfill in deprecated call names:
+        Atomics.wait = Atomics.futexWait;
+        Atomics.notify = Atomics.futexWake;
+    }
+	else if (typeof Atomics.wake == "function" && typeof Atomics.notify == "undefined") {
+        //Polyfill in deprecated call names:
+        Atomics.notify = Atomics.wake;
+    }
+}

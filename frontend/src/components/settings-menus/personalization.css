@@ -1,0 +1,14 @@
+.personalization-container {
+  padding: 5px;
+}
+
+.birthday-selection {
+  display: flex;
+  flex-direction: row;
+  width: 300px;
+}
+
+.birthday-selector {
+  padding: 5px;
+  flex-grow: 1;
+}
