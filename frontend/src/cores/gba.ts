@@ -77,16 +77,17 @@ export class GBACore implements EmuCore {
 
     const mGBA = (await import('@thenick775/mgba-wasm')).default as any;
 
-    this.module = await mGBA({
-      canvas: this.canvas,
-      // Vite is configured with base './' so the app can live under a GitHub
-      // Pages project sub-path. A bare '/cores/mgba.wasm' would resolve to the
-      // domain root there and 404, taking the whole core down with it.
-      locateFile: (path: string) =>
-        path.endsWith('.wasm')
-          ? new URL('cores/mgba.wasm', document.baseURI).href
-          : path
-    });
+    // No locateFile override here, deliberately.
+    //
+    // RetroVault ships a hand-placed public/cores/mgba.wasm and points locateFile
+    // at it. Copying that pattern over is a trap: their checked-in binary is
+    // 1,929,991 bytes and the wasm inside @thenick775/mgba-wasm@2.4.1 is
+    // 1,833,656 -- different builds. Pinning locateFile would pair this package's
+    // JS glue with a wasm it was not compiled against. Letting the package
+    // resolve its own asset keeps glue and binary a matched pair, and Vite
+    // rewrites that reference to a hashed asset URL relative to the emitted
+    // bundle, which resolves correctly under a GitHub Pages project sub-path.
+    this.module = await mGBA({ canvas: this.canvas });
 
     await this.module.FSInit();
 
