@@ -1,4 +1,65 @@
 import { EmuCore, InputButton } from './types';
+import { registerAudioSink, unregisterAudioSink } from '../audio';
+import { isolationBlocked } from '../coi';
+
+/**
+ * How long to give the module factory before calling it dead.
+ *
+ * mGBA initialises in ~125ms with real isolation headers, and worst case here is
+ * a cold fetch of a 1.8MB wasm on a slow connection, so 30s is generous. What
+ * matters is that it is finite: without cross-origin isolation the factory never
+ * settles at all -- the SharedArrayBuffer transfer to the pthread worker throws
+ * out of band, as an unhandled rejection nothing in the app is listening for,
+ * and the promise we are awaiting simply never comes back. Reproduced in Chrome
+ * against the deployed build. A boot that hangs forever and says nothing is what
+ * the freeze report looked like from the user's side.
+ */
+const MODULE_INIT_TIMEOUT_MS = 30000;
+
+const ISOLATION_MESSAGE =
+  'This browser did not give the emulator the shared memory it needs (cross-origin isolation is off). ' +
+  'Reloading the page usually fixes it.';
+
+/**
+ * Race module init against a timeout and against the out-of-band failure the
+ * pthread pool reports on the window, so a stuck factory becomes an error
+ * instead of an indefinite wait.
+ */
+function bootModule<T>(factory: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      window.removeEventListener('unhandledrejection', onRejection);
+      fn();
+    };
+
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message = typeof reason === 'string' ? reason : reason?.message ?? '';
+      // Emscripten's worker handshake rejects on the window rather than through
+      // the factory promise. This is the only signal that init has really died.
+      if (/SharedArrayBuffer|crossOriginIsolated/i.test(message)) {
+        event.preventDefault();
+        finish(() => reject(new Error(ISOLATION_MESSAGE)));
+      }
+    };
+    window.addEventListener('unhandledrejection', onRejection);
+
+    const timer = setTimeout(() => {
+      finish(() =>
+        reject(new Error('The Game Boy Advance core did not finish starting up. Reload the page and try again.'))
+      );
+    }, MODULE_INIT_TIMEOUT_MS);
+
+    factory.then(
+      (value) => finish(() => resolve(value)),
+      (error) => finish(() => reject(error))
+    );
+  });
+}
 
 /**
  * GBA core backed by mGBA compiled to WebAssembly (@thenick775/mgba-wasm).
@@ -75,6 +136,17 @@ export class GBACore implements EmuCore {
     if (!romData) throw new Error('No ROM staged or supplied');
     const romName = filename ?? this.stagedName;
 
+    // Check before calling the factory, not after. mgba-wasm is a pthreads build
+    // and needs SharedArrayBuffer; without it the factory hangs rather than
+    // throwing, so this is the only place the user can be told what is wrong.
+    if (typeof SharedArrayBuffer === 'undefined' || !window.crossOriginIsolated) {
+      throw new Error(
+        isolationBlocked()
+          ? `${ISOLATION_MESSAGE} This page has already retried and could not get it.`
+          : ISOLATION_MESSAGE
+      );
+    }
+
     const mGBA = (await import('@thenick775/mgba-wasm')).default as any;
 
     // No locateFile override here, deliberately.
@@ -87,7 +159,7 @@ export class GBACore implements EmuCore {
     // resolve its own asset keeps glue and binary a matched pair, and Vite
     // rewrites that reference to a hashed asset URL relative to the emitted
     // bundle, which resolves correctly under a GitHub Pages project sub-path.
-    this.module = await mGBA({ canvas: this.canvas });
+    this.module = await bootModule(mGBA({ canvas: this.canvas }));
 
     await this.module.FSInit();
 
@@ -102,6 +174,37 @@ export class GBACore implements EmuCore {
     this.stagedRom = null;
     this.booted = true;
     this.paused = false;
+
+    this.attachAudio();
+  }
+
+  /**
+   * Hand this core's audio to the shared manager.
+   *
+   * Registered after loadGame because that is when mGBA opens its SDL2 audio
+   * device, so `module.SDL2` does not exist before it. Everything the manager
+   * needs is read through getters for the same reason -- nothing here captures a
+   * node that may not have been built yet.
+   */
+  private attachAudio(): void {
+    const module = this.module;
+    if (!module) return;
+
+    registerAudioSink({
+      id: 'gba',
+      // mGBA's real output context, not a private one. Resuming anything else
+      // makes no sound: that was the whole bug.
+      context: () => module.SDL2?.audioContext ?? null,
+      // mGBA takes 0.0..2.0 where 1.0 is 100%, and our 0..1 maps onto the
+      // sensible half of that.
+      applyVolume: (level) => module.setVolume(level),
+      onUnlock: () => {
+        // Do not un-pause a paused game's audio device just because the user
+        // touched the screen.
+        if (!this.paused) module.resumeAudio();
+      },
+      analyserSource: () => module.SDL2?.audio?.scriptProcessorNode ?? null
+    });
   }
 
   pause(): void {
@@ -162,6 +265,7 @@ export class GBACore implements EmuCore {
   }
 
   destroy(): void {
+    unregisterAudioSink('gba');
     if (this.module) {
       try {
         this.module.quitGame();

@@ -1,0 +1,47 @@
+/*
+ * Own file so this does not collide with emulator.css, which the touch branch
+ * owns. The old `.emulator-boot-error` rule there is now unused.
+ */
+.emulator-notice {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  /* Above the touch-control overlay: an error the user cannot reach is no
+     better than no error at all. */
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: min(34rem, calc(100vw - 2rem));
+  padding: 0.9rem 1.1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+  background: var(--fallback-b1, oklch(var(--b1) / 1));
+  border: 1px solid currentColor;
+}
+
+.emulator-notice-error {
+  color: var(--fallback-er, oklch(var(--er) / 1));
+}
+
+.emulator-notice-warning {
+  color: var(--fallback-wa, oklch(var(--wa) / 1));
+}
+
+.emulator-notice-message {
+  margin: 0;
+  color: var(--fallback-bc, oklch(var(--bc) / 1));
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.emulator-notice-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+body.eco-mode .emulator-notice {
+  box-shadow: none;
+}

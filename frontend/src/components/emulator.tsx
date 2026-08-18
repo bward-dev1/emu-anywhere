@@ -10,6 +10,9 @@ import {
 } from '../display-settings';
 import { EmuCore, System } from '../cores/types';
 import TouchControls from './touch-controls';
+import AudioControls from './audio-controls';
+import EmulatorNotice from './emulator-notice';
+import { startWatchdog } from '../watchdog';
 
 interface EmulatorProps {
   core: EmuCore;
@@ -25,9 +28,13 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
   const [paused, setPaused] = useState(false);
   const [fastForward, setFastForward] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
+  const [stallMs, setStallMs] = useState<number | null>(null);
   const gbaCanvasRef = useRef<HTMLCanvasElement>(null);
   const screenStageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  // Only the pause WE caused when Settings opened may be undone when it closes;
+  // a pause the user asked for has to survive a trip through the menu.
+  const pausedForSettingsRef = useRef(false);
 
   const { settings, update, reset } = useDisplaySettings();
   // Dragging the picture around and playing a DS game are the same gesture, so
@@ -65,6 +72,7 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
   };
 
   const openSettings = () => {
+    if (!paused) pausedForSettingsRef.current = true;
     pauseEmulator();
     onOpenSettings();
   };
@@ -73,6 +81,26 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
     core.destroy();
     stopEmulating();
   };
+
+  // Opening Settings paused the emulator and nothing ever resumed it, so every
+  // trip through the menu left the game stopped with no sign of why. The dialog
+  // fires `close` whichever way it is dismissed -- the Close button, Escape, or
+  // SettingsModal calling close() when its `showing` prop goes false.
+  useEffect(() => {
+    const dialog = document.getElementById('settings-modal');
+    if (!dialog) return;
+    const onClose = () => {
+      if (!pausedForSettingsRef.current) return;
+      pausedForSettingsRef.current = false;
+      resumeEmulator();
+    };
+    dialog.addEventListener('close', onClose);
+    return () => dialog.removeEventListener('close', onClose);
+  }, [paused]);
+
+  // Notice a main thread that stopped responding for long enough that the app
+  // looked dead, and offer a way out once it comes back.
+  useEffect(() => startWatchdog((report) => setStallMs(report.gap)) ?? undefined, []);
 
   useEffect(() => {
     // Lock page scroll/pull-to-refresh for as long as the emulator view is
@@ -226,6 +254,7 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
               <LuChevronsRight size={'1.5em'} />
             </button>
           </div>
+          <AudioControls />
         </div>
       </div>
       <div
@@ -295,7 +324,14 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
         </div>
       )}
       {bootError && (
-        <div className="emulator-boot-error">Could not start this ROM: {bootError}</div>
+        <EmulatorNotice message={`Could not start this ROM: ${bootError}`} onStop={stopEmulating} />
+      )}
+      {!bootError && stallMs !== null && (
+        <EmulatorNotice
+          tone="warning"
+          message={`The emulator stopped responding for about ${Math.round(stallMs / 1000)} seconds. Reload if it keeps happening.`}
+          onDismiss={() => setStallMs(null)}
+        />
       )}
       <TouchControls system={system} onInput={handleTouchInput} buttonScale={settings.buttonScale} />
     </>

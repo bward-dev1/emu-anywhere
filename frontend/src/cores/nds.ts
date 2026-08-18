@@ -1,6 +1,78 @@
 import { EmuCore, InputButton } from './types';
+import { destinationGainFor, registerAudioSink, unregisterAudioSink } from '../audio';
+
+/**
+ * The bits of WebMelon we have to reach past the public SDK for. Its shipped
+ * webmelon.d.ts describes neither `audio` nor `_internal`, so audio has to be
+ * addressed through a narrow structural type rather than `any` everywhere.
+ */
+interface WebMelonAudioInternals {
+  _internal?: {
+    emulatorAudioCtx?: AudioContext;
+    emulatorAudioNode?: AudioNode | null;
+  };
+  audio?: {
+    getAudioContext?: () => AudioContext;
+  };
+}
+
+const webMelonAudio = (): WebMelonAudioInternals | null =>
+  (window.WebMelon as unknown as WebMelonAudioInternals) ?? null;
 
 export class NDSCore implements EmuCore {
+  private paused: boolean = false;
+
+  constructor() {
+    // Attach in the constructor, not in boot(), for two reasons. The firmware
+    // boot path in entrypoint.tsx builds an NDSCore and never calls boot(), so
+    // boot() would miss it entirely. And WebMelon's AudioWorkletNode is created
+    // by an async createAudioProcessor() during startEmulation -- our gain node
+    // has to already own the destination by then, or the worklet connects
+    // straight to the speakers and the volume control has nothing to act on.
+    this.attachAudio();
+  }
+
+  /**
+   * WebMelon builds its AudioContext the instant its script tag runs, long
+   * before anyone has touched the screen, and only ever tries to un-suspend it
+   * from inside its own frame loop -- which is a timer callback, not a user
+   * gesture. Safari ignores that, so on iOS the context stays suspended for the
+   * whole session and the DS is silent. Nothing in the frontend touched it
+   * before this.
+   *
+   * There is also no volume anywhere in the WebMelon SDK, so level and mute go
+   * through a GainNode we insert in front of the destination.
+   */
+  private attachAudio(): void {
+    registerAudioSink({
+      id: 'nds',
+      // Read through every time: WebMelon closes this context and constructs a
+      // fresh one on shutdown, so a captured reference is stale after one stop.
+      context: () => webMelonAudio()?._internal?.emulatorAudioCtx ?? null,
+      applyVolume: (level) => {
+        const ctx = webMelonAudio()?._internal?.emulatorAudioCtx;
+        if (!ctx || ctx.state === 'closed') return;
+        destinationGainFor(ctx).gain.value = level;
+      },
+      onUnlock: () => {
+        // WebMelon's own accessor resumes as a side effect; harmless when the
+        // context is already running.
+        webMelonAudio()?.audio?.getAudioContext?.();
+      },
+      holdSuspended: () => this.paused,
+      // Measure at the gain node rather than at WebMelon's worklet, because
+      // everything that reaches the speakers on this context passes through it.
+      // That makes a reading post-volume (so mute really does read as zero) and
+      // it exists from the moment we attach, instead of appearing whenever the
+      // async worklet finishes loading.
+      analyserSource: () => {
+        const ctx = webMelonAudio()?._internal?.emulatorAudioCtx;
+        if (!ctx || ctx.state === 'closed') return null;
+        return destinationGainFor(ctx);
+      }
+    });
+  }
+
   async boot(rom: Uint8Array): Promise<void> {
     if (!window.WebMelon) {
       throw new Error('WebMelon not loaded');
@@ -51,12 +123,14 @@ export class NDSCore implements EmuCore {
 
   pause(): void {
     if (window.WebMelon) {
+      this.paused = true;
       window.WebMelon.emulator.pause();
     }
   }
 
   resume(): void {
     if (window.WebMelon) {
+      this.paused = false;
       window.WebMelon.emulator.resume();
     }
   }
@@ -101,6 +175,7 @@ export class NDSCore implements EmuCore {
   }
 
   destroy(): void {
+    unregisterAudioSink('nds');
     if (window.WebMelon) {
       window.WebMelon.emulator.shutdown();
     }

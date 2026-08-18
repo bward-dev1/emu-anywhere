@@ -1,0 +1,49 @@
+/*
+ * Self-contained so this can drop into the emulator header without touching
+ * emulator.css, which two other branches are editing right now.
+ */
+.audio-controls {
+  position: relative;
+  display: inline-flex;
+}
+
+.audio-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  min-width: 15rem;
+  border-radius: 0.75rem;
+  background: var(--fallback-b1, oklch(var(--b1) / 1));
+  border: 1px solid var(--fallback-bc, oklch(var(--bc) / 0.2));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
+}
+
+.audio-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.audio-panel-row input[type='range'] {
+  flex: 1;
+  /* Comfortably tappable with a thumb on an iPad rather than a mouse. */
+  min-height: 2rem;
+}
+
+.audio-panel-value {
+  min-width: 3ch;
+  text-align: right;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Eco mode kills decoration everywhere else in the app; match it. */
+body.eco-mode .audio-panel {
+  box-shadow: none;
+}
