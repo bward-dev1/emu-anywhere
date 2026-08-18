@@ -9,16 +9,25 @@ import ControlsSettingsMenu from "./settings-menus/controls";
 import PersonalizationSettingsMenu from "./settings-menus/personalization";
 import FirmwareSettingsMenu from "./settings-menus/firmware";
 import SaveDataSettingsMenu from "./settings-menus/savedata";
+import { System } from "../cores/types";
 
 interface SettingsModalProps {
   showing: boolean;
   onClose: () => void;
+  // The system currently being emulated, or null at the entrypoint. The
+  // Controls menu needs it so it edits the bindings for the core that is
+  // actually running instead of always showing the DS map.
+  system?: System | null;
 };
+
+export interface SettingsMenuProps {
+  system: System | null;
+}
 
 interface SettingsMenuItem {
   displayName: string;
   icon: ReactNode;
-  component: FC;
+  component: FC<SettingsMenuProps>;
 }
 
 const settingsMenus: {[key: string]: SettingsMenuItem} = {
@@ -49,18 +58,28 @@ const settingsMenus: {[key: string]: SettingsMenuItem} = {
   }
 };
 
-export default function SettingsModal({ showing, onClose }: SettingsModalProps){
+export default function SettingsModal({ showing, onClose, system = null }: SettingsModalProps){
   const settingsModalRef = useRef<any>(null);
   const [selectedMenu, setSelectedMenu] = useState('controls');
 
   const closeSettings = () => {
-    window.localStorage.setItem('inputSettings', JSON.stringify(window.WebMelon.input.getInputSettings()));
-    window.localStorage.setItem('firmwareSettings', JSON.stringify(window.WebMelon.firmware.getFirmwareSettings()));
+    // Persisting WebMelon's settings is best-effort. It is a build artifact
+    // (public/static/webmelon.js, gitignored and copied in by the build script),
+    // so it can legitimately be missing, and an exception here would leave the
+    // modal stuck open with no way out.
+    if (window.WebMelon) {
+      window.localStorage.setItem('inputSettings', JSON.stringify(window.WebMelon.input.getInputSettings()));
+      window.localStorage.setItem('firmwareSettings', JSON.stringify(window.WebMelon.firmware.getFirmwareSettings()));
+    }
     onClose();
   };
 
   useEffect(() => {
-    if (!settingsModalRef.current || !window.WebMelon) {
+    // Deliberately not gated on window.WebMelon any more. Controls now covers
+    // the GBA core as well, which has nothing to do with the DS SDK, so the
+    // whole settings dialog refusing to open without it locked GBA players out
+    // of their own key bindings.
+    if (!settingsModalRef.current) {
       return;
     }
 
@@ -118,7 +137,7 @@ export default function SettingsModal({ showing, onClose }: SettingsModalProps){
           </ul>
           <div className="settings-item">
             {showing ? (
-              <SettingsMenuComponent />
+              <SettingsMenuComponent system={system} />
             ) : null}
           </div>
         </div>

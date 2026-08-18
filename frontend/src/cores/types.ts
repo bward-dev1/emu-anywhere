@@ -22,6 +22,18 @@ export interface EmuCore {
   setSpeed(multiplier: number): void;
   destroy(): void;
   getGameTitle(): string | null;
+  // Optional capabilities. Present on cores that support them, absent
+  // elsewhere, so callers feature-test rather than branching on system.
+  //
+  // setNativeInputEnabled exists because mGBA compiles its own SDL keyboard
+  // handler into the wasm. The app's binding layer switches it off so there is
+  // exactly one owner of button state; WebMelon needs no equivalent because its
+  // handler is JS we already drive through its settings.
+  setNativeInputEnabled?(enabled: boolean): void;
+  saveState?(slot: number): boolean;
+  loadState?(slot: number): boolean;
+  screenshot?(): boolean;
+  reset?(): void;
 }
 
 export interface CoreState {

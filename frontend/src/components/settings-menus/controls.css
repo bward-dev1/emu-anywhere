@@ -2,9 +2,64 @@
   padding: 5px;
 }
 
-.controls-input-mode-selector {
-  text-align: center;
+.controls-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
+}
+
+.controls-system-badge {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+/* The import picker is driven by its own button so the file input itself is
+   never shown, but it must stay in the layout tree to be clickable. */
+.controls-file-input {
+  display: none;
+}
+
+.controls-hint,
+.controls-notice {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0 0 10px;
+}
+
+.controls-hint {
+  opacity: 0.7;
+}
+
+.controls-notice {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(101, 195, 200, 0.18);
+}
+
+.controls-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.controls-section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  margin: 12px 4px 4px;
+}
+
+.controls-column-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .controls-control {
@@ -16,14 +71,16 @@
 .controls-ctrl-name {
   flex-grow: 1;
   align-items: center;
+  min-width: 90px;
 }
 
 .controls-ctrl-name-text {
   font-size: 14px;
 }
 
-.controls-ctrl-primary, .controls-ctrl-alternate {
-  flex-basis: 125px;
+.controls-slot {
+  flex-basis: 110px;
+  flex-shrink: 0;
   cursor: pointer;
   border: 1px dashed;
   border-radius: 8px;
@@ -36,8 +93,54 @@
   height: 35px;
 }
 
+.controls-slot:hover {
+  border-color: currentColor;
+}
+
 .controls-ctrl-active {
   border-color: red;
+  border-style: solid;
+}
+
+/* Fixed basis rather than auto: the shortcut rows have no checkboxes, and
+   without a reserved column their key slots would sit at a different x than
+   the button rows above them. */
+.controls-flags {
+  flex-basis: 120px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 6px;
+}
+
+.controls-flag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.controls-turbo-rate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.controls-turbo-rate .range {
+  flex: 1;
+}
+
+.controls-turbo-value {
+  font-size: 12px;
+  opacity: 0.7;
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: right;
 }
 
 .unbound-text {
@@ -48,4 +151,14 @@
 .unbound-text-active {
   font-size: 12px;
   color: red;
+}
+
+@media (max-width: 640px) {
+  .controls-slot {
+    flex-basis: 80px;
+  }
+
+  .controls-flags {
+    flex-basis: 100px;
+  }
 }

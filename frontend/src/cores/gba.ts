@@ -258,6 +258,36 @@ export class GBACore implements EmuCore {
     }
   }
 
+  /**
+   * Turn mGBA's own SDL keyboard handling on or off.
+   *
+   * mGBA bootstraps "canvas wiring, keyboard events, and other autonomous
+   * functions" itself, with its key map living in C inside the wasm. That is
+   * why GBA controls were unrebindable: there was no JS map to edit. The app's
+   * input layer calls this with false on attach so that it is the only thing
+   * pressing buttons, and true again on teardown.
+   */
+  setNativeInputEnabled(enabled: boolean): void {
+    if (this.module && typeof this.module.toggleInput === 'function') {
+      this.module.toggleInput(enabled);
+    }
+  }
+
+  saveState(slot: number): boolean {
+    if (!this.module || typeof this.module.saveState !== 'function') return false;
+    return !!this.module.saveState(slot);
+  }
+
+  loadState(slot: number): boolean {
+    if (!this.module || typeof this.module.loadState !== 'function') return false;
+    return !!this.module.loadState(slot);
+  }
+
+  screenshot(): boolean {
+    if (!this.module || typeof this.module.screenshot !== 'function') return false;
+    return !!this.module.screenshot();
+  }
+
   reset(): void {
     if (this.module && typeof this.module.quickReload === 'function') {
       this.module.quickReload();
