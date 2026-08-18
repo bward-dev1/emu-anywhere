@@ -51,6 +51,7 @@ export function Main() {
       <SettingsModal
         showing={settingsOpen}
         onClose={onCloseSettings}
+        system={currentSystem}
       />
     </>
   )

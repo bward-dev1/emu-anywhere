@@ -10,6 +10,7 @@ import {
 } from '../display-settings';
 import { EmuCore, System } from '../cores/types';
 import TouchControls from './touch-controls';
+import { useDesktopInput, InputAction } from '../input';
 
 interface EmulatorProps {
   core: EmuCore;
@@ -184,6 +185,51 @@ export default function Emulator({ core, system, onOpenSettings, stopEmulating }
       core.setButton(mappedBtn as any, pressed);
     }
   };
+
+  /**
+   * Rebindable host-side actions, driven by the keyboard/gamepad layer.
+   *
+   * Emulated buttons go straight to the core from the router, but these need
+   * the view's state (pause, fast-forward) or the document (fullscreen), so
+   * they come back up here. Fast-forward is the only one that acts on both
+   * edges -- the rest fire on press so that holding the key does not repeat.
+   */
+  const handleExtraAction = (action: InputAction, pressed: boolean) => {
+    if (action === 'FAST_FORWARD') {
+      if (pressed) startFastForward();
+      else stopFastForward();
+      return;
+    }
+    if (!pressed) return;
+
+    switch (action) {
+      case 'PAUSE':
+        if (paused) resumeEmulator();
+        else pauseEmulator();
+        break;
+      case 'SAVE_STATE':
+        core.saveState?.(1);
+        break;
+      case 'LOAD_STATE':
+        core.loadState?.(1);
+        break;
+      case 'SCREENSHOT':
+        core.screenshot?.();
+        break;
+      case 'RESET':
+        core.reset?.();
+        break;
+      case 'FULLSCREEN':
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen().catch(() => {
+          // Denied by the browser (no user gesture chain, or disallowed).
+          // Nothing to recover -- the game keeps running windowed.
+        });
+        break;
+    }
+  };
+
+  useDesktopInput({ core, system, onExtra: handleExtraAction });
 
   return (
     <>
