@@ -112,10 +112,20 @@ export default function Entrypoint({ onStartEmulating, onOpenSettings }: Entrypo
   }, [isFirmwareBooting]);
 
   useEffect(() => {
-    window.WebMelon.firmware.canFirmwareBoot();
-    setTimeout(() => {
-      setFirmwareBootEnabled(window.WebMelon.firmware.canFirmwareBoot());
-    }, 500);
+    // This probe must never throw. It is a DS-only concern, but an exception here aborts the
+    // whole effect flush for this commit -- which silently takes the GBA boot effect with it.
+    const probeFirmwareBoot = () => {
+      try {
+        return window.WebMelon?.firmware?.canFirmwareBoot() ?? false;
+      } catch (error) {
+        console.error('Firmware boot probe failed:', error);
+        return false;
+      }
+    };
+
+    probeFirmwareBoot();
+    const timer = setTimeout(() => setFirmwareBootEnabled(probeFirmwareBoot()), 500);
+    return () => clearTimeout(timer);
   }, []);
 
   return (

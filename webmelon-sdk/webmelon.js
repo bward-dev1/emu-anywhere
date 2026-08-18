@@ -17,6 +17,19 @@
     subscribers.map(subscriber => new Promise(() => subscriber(...callArgs)));
   };
 
+  /**
+   * Emscripten only defines the global FS once static/wasmemulator.js has loaded AND its
+   * runtime has initialised. Referencing a bare `FS` before then is a ReferenceError, not
+   * an undefined -- and callers probe the firmware from UI effects, where a single throw
+   * takes down everything else queued in that same flush. Always go through this.
+   *
+   * @returns {object|null} the Emscripten FS module, or null if it is not usable yet
+   */
+  const getFS = () => {
+    if (typeof FS === 'undefined' || !FS || typeof FS.analyzePath !== 'function') return null;
+    return FS;
+  };
+
   const getRelativeCoords = (touchScreen, clientX, clientY) => {
     const rect = touchScreen.getBoundingClientRect();
     const mouseX = clientX - rect.left;
@@ -435,14 +448,24 @@
         WebMelon._internal.subscribers.saveComplete.push(callback);
       },
       initializeFirmwareDirectory: () => {
-        if (FS.analyzePath('/firmware').exists) return;
-        FS.mkdir('/firmware');
-        WebMelon.storage.mountIndexedDB('/firmware');
-        FS.syncfs(true, (err) => {
-          if (err) {
-            console.error('initialization error', err);
-          }
-        });
+        const fs = getFS();
+        if (!fs) return false;
+        try {
+          if (fs.analyzePath('/firmware').exists) return true;
+          fs.mkdir('/firmware');
+          WebMelon.storage.mountIndexedDB('/firmware');
+          fs.syncfs(true, (err) => {
+            if (err) {
+              console.error('initialization error', err);
+            }
+          });
+          return true;
+        } catch (err) {
+          // The runtime can be mid-init here (FS defined, root not mounted yet). Report and
+          // move on -- the caller retries, and firmware boot simply stays unavailable.
+          console.error('initializeFirmwareDirectory failed', err);
+          return false;
+        }
       },
       initializeSavefilesDirectory: (callback) => {
         if (FS.analyzePath('/savefiles').exists) {
@@ -754,7 +777,10 @@
         console.log('uploading bios file...')
         console.log(filename)
         console.log(biosData)
-        WebMelon.storage.initializeFirmwareDirectory();
+        if (!WebMelon.storage.initializeFirmwareDirectory()) {
+          console.error('cannot upload bios file: filesystem is not ready');
+          return;
+        }
         if (filename === 'bios7.bin' && biosData.length === 0x4000) {
           WebMelon.storage.write('/firmware/bios7.bin', biosData);
         } else if (filename === 'bios9.bin' && biosData.length === 0x1000) {
@@ -764,14 +790,21 @@
         }
       },
       getActiveBiosFiles: () => {
-        return {
-          hasBios7: FS.analyzePath('/firmware/bios7.bin').exists,
-          hasBios9: FS.analyzePath('/firmware/bios9.bin').exists,
-          hasFirmware: FS.analyzePath('/firmware/firmware.bin').exists
-        };
+        const fs = getFS();
+        if (!fs) return { hasBios7: false, hasBios9: false, hasFirmware: false };
+        try {
+          return {
+            hasBios7: fs.analyzePath('/firmware/bios7.bin').exists,
+            hasBios9: fs.analyzePath('/firmware/bios9.bin').exists,
+            hasFirmware: fs.analyzePath('/firmware/firmware.bin').exists
+          };
+        } catch (err) {
+          console.error('getActiveBiosFiles failed', err);
+          return { hasBios7: false, hasBios9: false, hasFirmware: false };
+        }
       },
       canFirmwareBoot: () => {
-        WebMelon.storage.initializeFirmwareDirectory();
+        if (!WebMelon.storage.initializeFirmwareDirectory()) return false;
         const activeBiosFiles = WebMelon.firmware.getActiveBiosFiles();
         return (activeBiosFiles.hasBios7 && activeBiosFiles.hasBios9 && activeBiosFiles.hasFirmware);
       }

@@ -45,7 +45,14 @@ export default defineConfig({
         // Precache everything, including the emulator wasm/js in static/, so the
         // app fully works offline once installed.
         globPatterns: ['**/*.{js,css,html,wasm,png,svg,webmanifest}'],
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // Adds Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy to the
+        // document response so the page is cross-origin isolated and mgba-wasm's
+        // pthreads build can hand a SharedArrayBuffer to its worker. GitHub Pages
+        // cannot send those headers itself. See public/coi-headers.js.
+        // Injected at the top of the generated SW, so its fetch listener runs
+        // before Workbox's routing and wins navigation requests.
+        importScripts: ['coi-headers.js']
       }
     })
   ],
